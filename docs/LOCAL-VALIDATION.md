@@ -1,0 +1,117 @@
+# Local validation and pull request policy
+
+## November 13, 2026
+
+Refreshed the CI branch on current `main`, preserving `CONTRIBUTING.md`.
+The locked Python dependency installation succeeded. The backend suite ran
+91 tests: 90 passed and one Windows symlink test was skipped. Frontend
+TypeScript checks and the production build passed (with the existing bundle
+size warning). The Chromium acceptance test passed, including all 15
+non-connection screens and the full HTTP/SQLite/server-restart round trip.
+Its temporary state directory now follows the required `.assistant` layout,
+and its history-search assertion accounts for highlighted matches.
+
+The latest existing `main` GitHub Actions run (43271092104) passed both jobs.
+The billing/network/install blockers recorded below are historical. The
+required-PR-and-CI ruleset remains active; `frontend` and `backend` are required
+with up-to-date branches. This branch adds browser acceptance, credential-file
+checks, package building, timeouts, read-only workflow permissions, cancellation
+of superseded runs. The workflow runs only on pull request events, including
+new commits to an open PR; branch pushes alone do not run CI. Every PR runs
+both jobs without path filters or account credentials. Browser acceptance uses
+a deterministic model, not OpenAI or connected provider accounts.
+
+## November 12, 2026
+
+Validated the active Python backend and React frontend. The retired TypeScript
+backend under `legacy/` is reference material and is not part of the application.
+No real Google, Slack, Mastodon, Spotify, Shopify or Home Assistant connection
+was authorized or exercised. Connector unit tests use mocked transports only.
+
+| Check | Result |
+| --- | --- |
+| Backend unit/component/ASGI suite | 91 run: 90 passed, 1 Windows symlink skip |
+| Python source compilation | Passed |
+| Frontend TypeScript check | Passed |
+| Frontend production build | Passed; Vite reports a bundle-size warning |
+| Tracked credential/runtime-file guard | Passed |
+| Git whitespace validation | Passed |
+| Chromium/HTTP acceptance | Blocked locally by restricted socket-pair creation; added to CI |
+| Live GPT-6 Luna call | Not verified in this session; network access is restricted |
+| Account connections | Excluded from live testing as requested |
+
+The terminal cannot resolve external hosts: GitHub, npm and PyPI lookups fail,
+and direct DNS queries return access denied. Git metadata is read-only under the
+task's permission profile, so the CLI cannot create a branch or commit here.
+These are execution-policy restrictions, not evidence of an invalid GitHub token.
+The browser can reach GitHub separately.
+
+The existing GitHub Actions run also failed before starting either job. GitHub
+reports: "The job was not started because your account is locked due to a billing
+issue." This is separate from the local terminal restriction. Required checks
+will keep merges blocked until the account billing issue is resolved and the
+workflow completes successfully. Billing settings were not changed.
+
+The npm lockfile installed successfully from the existing local cache. The
+backend suite used installed Python 3.14.2 packages: Agents SDK 0.17.2,
+OpenAI 2.37.0, FastAPI 0.136.1, Uvicorn 0.47.0, HTTPX 0.28.1 and
+cryptography 48.0.0. This is **not** a successful clean locked Python install:
+the lockfile pins OpenAI 2.26.0 and downloads were blocked. CI uses the locked
+workspace installation rather than these local packages.
+
+The `.dev.vars.txt` file discovered locally is now ignored along with
+`.dev.vars` and its variants; `.dev.vars.example` remains versioned. No secret
+values were printed, staged or uploaded. The application expects the exact name
+`.dev.vars`; Windows may hide the `.txt` extension in Explorer.
+
+## Reproduce the checks
+
+Run from the repository root in an environment with network and Git write access:
+
+```sh
+uv sync --all-packages --locked
+npm --prefix frontend ci
+python scripts/check-private-files.py
+npm --prefix frontend run check
+npm --prefix frontend run build
+uv run --locked --directory backend python -m compileall -q src
+uv run --locked --directory backend python -m unittest discover -s tests -t . -v
+uv run --locked --directory backend playwright install chromium
+uv run --locked --directory backend python -u -m tests.ui_acceptance
+uv build --package personal-assistant-harness-backend --out-dir dist/backend
+```
+
+UI acceptance starts its own server with a deterministic injected model and
+temporary SQLite/workspace files. It loads no `.dev.vars`, denies external
+browser requests, and visits all 15 screens other than Connections. It exercises
+chat, memory correction/lineage/forgetting, file writing/reading/listing, goals,
+history search, people, workflow completion, procedure approval/replay, scheduled
+execution, inbox results, theme persistence and server restart persistence.
+This verifies application wiring, not live model reasoning or real account access.
+
+## Main branch policy
+
+All changes go through a non-main branch and a pull request. Never commit or push
+directly to `main`. GitHub settings, rather than a local Git hook, enforce this.
+
+An active ruleset and classic branch protection target `main`:
+
+1. **main — required PR and CI**: requires a pull request, resolved conversations,
+   an up-to-date branch and successful GitHub Actions `frontend` and `backend`
+   checks. Blocks deletion and force pushes. Its bypass list is empty.
+2. **Classic branch protection for main**: restricts branch updates to the user
+   `SupradeepDanturti` and requires one review, code-owner review and dismissal
+   of stale approvals. Its approval exemption names only `SupradeepDanturti`;
+   no teams or apps are exempt. These restrictions also apply to administrators.
+   The former **main — Supradeep controls merges** ruleset is disabled to avoid
+   imposing an additional approval requirement that cannot exempt an individual.
+
+Only Supradeep can perform the final PR merge without another person's approval.
+The independent first rule still prevents
+direct pushes and CI bypass by the owner. Other contributors cannot merge on
+their own, even after an approval. The CODEOWNERS file assigns every path to
+`@SupradeepDanturti` once this PR is merged into the base branch.
+
+Repository administrators can edit rulesets; these settings cannot prevent the
+repository owner from deliberately changing the policy later. No PR is merged
+as part of this validation work.

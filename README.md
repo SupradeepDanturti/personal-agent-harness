@@ -19,6 +19,16 @@ builds and thin command/test clients. The retired backend is in
 `legacy/typescript` for reference; it is not part of the running app.
 No VM is provisioned. Cloudflare deployment is deferred.
 
+## Pull request checks
+
+GitHub Actions runs `frontend` and `backend` for every pull request. Both checks
+must pass against an up-to-date branch before merging into `main`. CI checks
+TypeScript, builds the frontend and Python package, runs the backend suite,
+rejects tracked local credentials/state, and exercises Chromium through the
+local API and SQLite, including server restart persistence. These checks use
+isolated fixtures and a deterministic model; live model/provider smoke tests
+remain separate. See [local validation](docs/LOCAL-VALIDATION.md).
+
 ## Project layout and development
 
 The frontend is a standalone npm project in `frontend/`. Python is a uv workspace:

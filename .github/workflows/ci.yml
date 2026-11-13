@@ -1,13 +1,25 @@
 name: Validate
-on: [push, pull_request]
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -16,10 +28,25 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.14'
+          enable-cache: true
+      - name: Install backend and browser for local UI acceptance
+        working-directory: .
+        run: |
+          uv sync --all-packages --locked
+          uv run --locked --directory backend playwright install --with-deps chromium
+      - name: Exercise local UI, HTTP, SQLite and restart persistence
+        working-directory: .
+        run: uv run --locked --directory backend python -u -m tests.ui_acceptance
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       # Only the historical Node-to-Python SQLite migration fixture needs Node.
       - uses: actions/setup-node@v4
         with:
@@ -29,5 +56,9 @@ jobs:
           python-version: '3.14'
           enable-cache: true
       - run: uv sync --all-packages --locked
+      - name: Reject tracked credential and runtime files
+        run: python scripts/check-private-files.py
       - run: uv run --locked --directory backend python -m compileall -q src
       - run: uv run --locked --directory backend python -m unittest discover -s tests -t . -v
+      - name: Build Python distribution
+        run: uv build --package personal-assistant-harness-backend --out-dir dist/backend
