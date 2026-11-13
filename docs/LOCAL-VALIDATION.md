@@ -12,9 +12,9 @@ Its temporary state directory now follows the required `.assistant` layout,
 and its history-search assertion accounts for highlighted matches.
 
 The latest existing `main` GitHub Actions run (43271092104) passed both jobs.
-The billing/network/install blockers recorded below are historical. Both
-repository rulesets remain active; `frontend` and `backend` are required with
-up-to-date branches. This branch adds browser acceptance, credential-file
+The billing/network/install blockers recorded below are historical. The
+required-PR-and-CI ruleset remains active; `frontend` and `backend` are required
+with up-to-date branches. This branch adds browser acceptance, credential-file
 checks, package building, timeouts, read-only workflow permissions, cancellation
 of superseded runs. The workflow runs only on pull request events, including
 new commits to an open PR; branch pushes alone do not run CI. Every PR runs
@@ -94,18 +94,20 @@ This verifies application wiring, not live model reasoning or real account acces
 All changes go through a non-main branch and a pull request. Never commit or push
 directly to `main`. GitHub settings, rather than a local Git hook, enforce this.
 
-Two independent active rulesets target the default branch:
+An active ruleset and classic branch protection target `main`:
 
 1. **main — required PR and CI**: requires a pull request, resolved conversations,
    an up-to-date branch and successful GitHub Actions `frontend` and `backend`
    checks. Blocks deletion and force pushes. Its bypass list is empty.
-2. **main — Supradeep controls merges**: restricts branch updates and requires
-   one review, code-owner review and dismissal of stale approvals. Only
-   `SupradeepDanturti` can bypass this second rule, and only through a pull request.
+2. **Classic branch protection for main**: restricts branch updates to the user
+   `SupradeepDanturti` and requires one review, code-owner review and dismissal
+   of stale approvals. Its approval exemption names only `SupradeepDanturti`;
+   no teams or apps are exempt. These restrictions also apply to administrators.
+   The former **main — Supradeep controls merges** ruleset is disabled to avoid
+   imposing an additional approval requirement that cannot exempt an individual.
 
-Only Supradeep can perform the final PR merge, including approving his own
-changes through that explicit merge decision. This avoids GitHub's restriction
-on authors approving their own PRs. The independent first rule still prevents
+Only Supradeep can perform the final PR merge without another person's approval.
+The independent first rule still prevents
 direct pushes and CI bypass by the owner. Other contributors cannot merge on
 their own, even after an approval. The CODEOWNERS file assigns every path to
 `@SupradeepDanturti` once this PR is merged into the base branch.
