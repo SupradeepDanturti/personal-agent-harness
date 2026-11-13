@@ -16,7 +16,8 @@ The billing/network/install blockers recorded below are historical. Both
 repository rulesets remain active; `frontend` and `backend` are required with
 up-to-date branches. This branch adds browser acceptance, credential-file
 checks, package building, timeouts, read-only workflow permissions, cancellation
-of superseded runs, merge-queue triggers and a manual run option. Every PR runs
+of superseded runs. The workflow runs only on pull request events, including
+new commits to an open PR; branch pushes alone do not run CI. Every PR runs
 both jobs without path filters or account credentials. Browser acceptance uses
 a deterministic model, not OpenAI or connected provider accounts.
 
