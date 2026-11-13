@@ -1,5 +1,25 @@
 # Local validation and pull request policy
 
+## November 13, 2026
+
+Refreshed the CI branch on current `main`, preserving `CONTRIBUTING.md`.
+The locked Python dependency installation succeeded. The backend suite ran
+91 tests: 90 passed and one Windows symlink test was skipped. Frontend
+TypeScript checks and the production build passed (with the existing bundle
+size warning). The Chromium acceptance test passed, including all 15
+non-connection screens and the full HTTP/SQLite/server-restart round trip.
+Its temporary state directory now follows the required `.assistant` layout,
+and its history-search assertion accounts for highlighted matches.
+
+The latest existing `main` GitHub Actions run (43271092104) passed both jobs.
+The billing/network/install blockers recorded below are historical. Both
+repository rulesets remain active; `frontend` and `backend` are required with
+up-to-date branches. This branch adds browser acceptance, credential-file
+checks, package building, timeouts, read-only workflow permissions, cancellation
+of superseded runs, merge-queue triggers and a manual run option. Every PR runs
+both jobs without path filters or account credentials. Browser acceptance uses
+a deterministic model, not OpenAI or connected provider accounts.
+
 ## November 12, 2026
 
 Validated the active Python backend and React frontend. The retired TypeScript

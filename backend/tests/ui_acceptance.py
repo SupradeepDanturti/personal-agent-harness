@@ -65,7 +65,7 @@ class UIAcceptance(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="harness-ui-") as folder:
             root = Path(folder)
             config = Config(
-                root=root, data_dir=root / "state", port=0, token=TOKEN,
+                root=root, data_dir=root / ".assistant", port=0, token=TOKEN,
                 api_key="synthetic-model-no-network", encryption_secret=TOKEN,
                 frontend_dir=ROOT / "frontend/dist", browser_channel="chromium",
                 run_token_reservation=100, daily_token_limit=100000,
@@ -151,7 +151,7 @@ class UIAcceptance(unittest.TestCase):
                             navigate("History")
                             page.get_by_label("What are you looking for?").fill("Acceptance")
                             page.get_by_role("button", name="Keyword search", exact=True).click()
-                            expect(page.locator(".record-list").get_by_text("Acceptance chat marker", exact=False)).to_be_visible()
+                            expect(page.locator(".record-list")).to_contain_text("[Acceptance] chat marker")
 
                             navigate("People")
                             page.get_by_label("Name", exact=True).fill("Acceptance Person")
