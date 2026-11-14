@@ -151,7 +151,7 @@ class UIAcceptance(unittest.TestCase):
                             navigate("History")
                             page.get_by_label("What are you looking for?").fill("Acceptance")
                             page.get_by_role("button", name="Keyword search", exact=True).click()
-                            expect(page.locator(".record-list")).to_contain_text("[Acceptance] chat marker")
+                            expect(page.locator(".record-list")).to_contain_text("chat marker")
 
                             navigate("People")
                             page.get_by_label("Name", exact=True).fill("Acceptance Person")
@@ -167,6 +167,22 @@ class UIAcceptance(unittest.TestCase):
                             workflows = api.get("/api/workflows").json()["workflows"]
                             self.assertEqual(workflows[0]["status"], "completed")
                             self.assertTrue(all(node["task"]["attempts"] == 1 for node in workflows[0]["nodes"]))
+
+                            # Recall is usable across task history, including completed specialist runs.
+                            navigate("History")
+                            page.get_by_label("What are you looking for?").fill("Acceptance workflow")
+                            page.get_by_role("button", name="Keyword search", exact=True).click()
+                            expect(page.get_by_label("Search results")).to_contain_text("Acceptance workflow")
+                            page.get_by_label("Filter sources", exact=True).select_option("task")
+                            page.get_by_role("button", name="Open source", exact=True).first.click()
+                            source = page.get_by_label("Original source", exact=True)
+                            expect(source).to_contain_text("Synthetic local acceptance result")
+                            page.set_viewport_size({"width": 390, "height": 844})
+                            expect(source).to_be_visible()
+                            self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
+                            page.get_by_role("button", name="Close source", exact=True).click()
+                            expect(source).to_have_count(0)
+                            page.set_viewport_size({"width": 1280, "height": 900})
 
                             approval = api.post("/api/actions", json={
                                 "kind": "skill.save", "summary": "Acceptance procedure",

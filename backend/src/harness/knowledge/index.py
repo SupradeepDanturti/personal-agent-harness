@@ -15,6 +15,8 @@ def required(value, field, limit):
 
 
 def initialize_knowledge(db):
+    from harness.knowledge.recall import initialize_recall
+    initialize_recall(db)
     db.executescript('''
     CREATE VIRTUAL TABLE IF NOT EXISTS history_index USING fts5(message_id UNINDEXED,role UNINDEXED,content,created_at UNINDEXED,tokenize='unicode61');
     CREATE TRIGGER IF NOT EXISTS history_added AFTER INSERT ON messages BEGIN

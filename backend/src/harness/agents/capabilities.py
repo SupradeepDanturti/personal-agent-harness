@@ -9,6 +9,7 @@ class AgentCapabilities:
     schedule: Callable[[str, str, int | None], Any] | None = None
     operate: Callable[[str, str], Any] | None = None
     on_usage: Callable[[int, int], Any] | None = None
+    on_usage_details: Callable[[dict], Any] | None = None
     max_turns: int = 6
     read_only: bool = False
     web_search: bool = False

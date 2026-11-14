@@ -2,6 +2,8 @@
 import base64
 import hashlib
 import json
+import os
+import tempfile
 import time
 
 import httpx
@@ -76,8 +78,31 @@ class GoogleFixture:
         iv = bytes(range(12))
         sealed = AESGCM(hashlib.sha256(config.encryption_secret.encode()).digest()).encrypt(
             iv, json.dumps(value).encode(), None)
-        path.write_text(json.dumps({"version": 1, "iv": base64.b64encode(iv).decode(),
-            "encrypted": base64.b64encode(sealed[:-16]).decode(), "tag": base64.b64encode(sealed[-16:]).decode()}))
+        # Replace like the real vault: Windows can deny truncating a live vault
+        # file even when a sibling file can safely be replaced atomically.
+        body = json.dumps({"version": 1, "iv": base64.b64encode(iv).decode(),
+            "encrypted": base64.b64encode(sealed[:-16]).decode(), "tag": base64.b64encode(sealed[-16:]).decode()})
+        fd, name = tempfile.mkstemp(dir=path.parent, suffix='.fixture')
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+                handle.write(body)
+            for attempt in range(8):
+                try:
+                    os.replace(name, path)
+                    break
+                except PermissionError:
+                    if attempt == 7: raise
+                    time.sleep(0.05 * (attempt + 1))
+        finally:
+            for attempt in range(8):
+                try:
+                    os.unlink(name)
+                    break
+                except FileNotFoundError:
+                    break
+                except PermissionError:
+                    if attempt == 7: raise
+                    time.sleep(0.05 * (attempt + 1))
 
     def runtime(self, config, store=None):
         if not (config.data_dir / "credentials/google.enc").is_file():

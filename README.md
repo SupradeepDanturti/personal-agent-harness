@@ -19,6 +19,12 @@ builds and thin command/test clients. The retired backend is in
 `legacy/typescript` for reference; it is not part of the running app.
 No VM is provisioned. Cloudflare deployment is deferred.
 
+Use **History** to find retained conversations, saved memories, specialist task
+results, workflow plans and completed actions together. Keyword search is local;
+open an original source before reusing its result. The agent has the same bounded
+search/read tools and a 12,000-character reference context budget. External chat
+imports and MCP connections are planned in [the product roadmap](docs/PLAN.md).
+
 ## Pull request checks
 
 GitHub Actions runs `frontend` and `backend` for every pull request. Both checks

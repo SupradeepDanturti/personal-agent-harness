@@ -19,6 +19,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
             await runtime.google.complete_auth(query.get('code', ''), query.get('state', ''))
             return Response('Google connected. Return to the assistant Connections tab.', media_type='text/plain')
         if method == 'GET':
+            if route == '/recall/item': return JSONResponse(runtime.recall.read(query.get('kind'), query.get('id')))
             if route == '/history/index': return JSONResponse(runtime.history_index.status())
             if route == '/people': return JSONResponse(runtime.people.list(query.get('query','')))
             if re.fullmatch(r'/people/[^/]+/lineage',route): return JSONResponse({'lineage':runtime.people.lineage(id_)})
@@ -52,6 +53,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
                 return JSONResponse(file)
             if route == '/settings': return JSONResponse({'timezone': runtime.store.get_setting('timezone') or 'America/Toronto', 'nightlyDreamEnabled': runtime.store.get_setting('nightlyDreamEnabled') is not False})
         if method == 'POST':
+            if route == '/recall/search': return JSONResponse(runtime.recall.search(body.get('query')))
             if route == '/google/sheets': return JSONResponse(await runtime.sheets.register(body), 201)
             if route == '/google/sheets/search': return JSONResponse(await runtime.sheets.search(body.get('query', ''), body.get('pageToken')))
             sheet_match = re.fullmatch(r'/google/sheets/([^/]+)/(tabs|read|propose)', route)

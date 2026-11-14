@@ -923,6 +923,66 @@ pre {
   font-variant-numeric: tabular-nums;
   color: light-dark(#8b957e, #a3ae9c);
 }
+.nav-group {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+.nav-group-label {
+  padding: 8px 15px 5px;
+  color: light-dark(#727e63, #b1bca8);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.recall-results-heading,
+.recall-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.recall-results-heading {
+  justify-content: space-between;
+}
+.recall-meta {
+  font-size: 11px;
+  color: light-dark(#697260, #b1bca8);
+  margin-bottom: 10px;
+}
+.recall-kind {
+  background: light-dark(#e9eddf, #293526);
+  color: light-dark(#405433, #c7d8b7);
+  border-radius: 5px;
+  padding: 5px 8px;
+}
+.recall-filter select {
+  padding: 8px;
+  color: inherit;
+  background: light-dark(#fbfcf9, #191e19);
+  border: 1px solid light-dark(#cdd5c3, #46533f);
+  border-radius: 6px;
+  max-width: 100%;
+}
+.recall-source {
+  margin-bottom: 22px;
+}
+.recall-source pre {
+  max-height: 420px;
+  overflow: auto;
+}
+@media (max-width: 650px) {
+  .sidebar .nav-group {
+    display: flex;
+    gap: 4px;
+    margin: 0;
+    flex: 0 0 auto;
+  }
+  .sidebar .nav-group-label {
+    display: none;
+  }
+}
 .account {
   margin-top: auto;
   flex-shrink: 0;

@@ -17,6 +17,12 @@ export const views = [
   "Activity",
 ] as const;
 export type View = (typeof views)[number];
+export const navigationGroups: { label: string; items: readonly View[] }[] = [
+  { label: "Everyday", items: ["Chat", "Inbox", "Approvals"] },
+  { label: "Your work", items: ["Goals", "Tasks", "Workflows", "Schedules"] },
+  { label: "Your knowledge", items: ["History", "Memory", "People", "Files"] },
+  { label: "Tools & settings", items: ["Browser", "Connections", "Activity", "Repairs", "Evidence"] },
+];
 export const descriptions: Record<View, string> = {
   Chat: "A little context. A clear next step.",
   Goals: "A plan, its progress, and the next useful step.",
@@ -30,7 +36,7 @@ export const descriptions: Record<View, string> = {
   Files: "Your workspace and generated artifacts.",
   Connections: "Choose the services your assistant can access.",
   Activity: "A record of requests, decisions, and execution.",
-  History: "Find context across every retained conversation.",
+  History: "Find past conversations, specialist work, and saved results in one place.",
   People: "Reviewed people, groups and relationships, with sources.",
   Repairs: "Track corrections and unresolved failures through review.",
   Evidence: "Inspect source freshness and claim-support decisions.",

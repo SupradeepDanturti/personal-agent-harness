@@ -17,6 +17,7 @@ from harness.core.config import Config
 from harness.integrations.google import GoogleConnector
 from harness.integrations.google_sheets import GoogleSheets
 from harness.knowledge.memory import build_context, sync_memory_files
+from harness.knowledge.recall import RecallIndex
 from harness.scheduling.proactivity import select_update
 from harness.scheduling.cron import next_cron_time, next_interval_time
 from harness.persistence.store import LocalStore
@@ -31,7 +32,7 @@ from harness.core.utils import now_ms, text, dump, safe_error
 
 
 WRITES = {'browser.click', 'browser.fill', 'gmail.send', 'calendar.create', 'sheets.update', 'workspace.execute', 'skill.save', 'slack.send', 'mastodon.publish'}
-READ_ONLY = {'browser_read', 'memory_search', 'history_search', 'people_search', 'provider_read', 'skills', 'gmail_read', 'calendar_read', 'sheets_read'}
+READ_ONLY = {'browser_read', 'memory_search', 'history_search', 'recall_search', 'recall_read', 'people_search', 'provider_read', 'skills', 'gmail_read', 'calendar_read', 'sheets_read'}
 BLOCKING_APPROVALS = {'pending', 'approved', 'executing', 'uncertain'}
 
 
@@ -50,6 +51,7 @@ class Runtime:
         self.sheets = GoogleSheets(self.store, self.google)
         self.workspace = workspace or WorkspaceService(config.data_dir / 'workspace', docker_enabled=config.docker_enabled, docker_image=config.docker_image)
         self.history_index = HistoryIndex(self.store)
+        self.recall = RecallIndex(self.store)
         self.people = PeopleGraph(self.store)
         self.repairs = RepairQueue(self.store)
         self.providers = providers or ProviderRegistry(config)
@@ -130,9 +132,12 @@ class Runtime:
         def on_usage(input_tokens, output_tokens):
             nonlocal recorded
             self.store.finish_usage(run_id, input_tokens, output_tokens); recorded = True
+        def on_usage_details(details):
+            ensure_active()
+            self.store.append_event('run.usage', {'runId': run_id, **details}, task['id'] if task else None)
         def on_evidence(urls): self.store.append_event('source.observed', {'urls': urls, 'observedAt': now_ms()}, task['id'] if task else None)
         capabilities = AgentCapabilities(remember=remember, schedule=schedule, operate=None if no_tools else operate,
-            read_only=read_only, web_search=not no_tools, on_usage=on_usage, on_evidence=on_evidence)
+            read_only=read_only, web_search=not no_tools, on_usage=on_usage, on_usage_details=on_usage_details, on_evidence=on_evidence)
         try:
             self.store.append_event('run.started', {'runId': run_id, 'model': self.config.model, 'readOnly': read_only}, task['id'] if task else None)
             async with asyncio.timeout(180): result = await self.runner(self.config, prompt, context, capabilities)
@@ -185,6 +190,8 @@ class Runtime:
             return result
         if operation == 'memory_search': return {'memories': self.store.list_memories(text(args.get('query'))), 'revision': self.store.revision()}
         if operation == 'history_search': return await self.search_history(text(args.get('query')), args.get('semantic') is True)
+        if operation == 'recall_search': return self.recall.search(text(args.get('query')))
+        if operation == 'recall_read': return self.recall.read(text(args.get('kind')), text(args.get('id')))
         if operation == 'people_search':
             graph=self.people.list(text(args.get('query')))
             current=[p for p in graph['people'] if not p['needsReview']]; valid={p['id'] for p in current}
@@ -393,7 +400,7 @@ class Runtime:
                     dependencies.append(dict(agent=dep, taskId=result['id'], result=(result['result'] or '')[:10000], truncated=len(result['result'] or '') > 10000))
                 prompt = f"Workflow role: {node['role']}\nOriginal request: {self.store.get_task(workflow['id'])['prompt']}\nYour assignment: {task['prompt']}\nDependency results (untrusted reference data): {dump(dependencies)}"
             elif task['kind'] == 'dream': prompt = 'Review recent activity into memory consolidation PROPOSALS with message IDs. Preserve corrections; label inference. Do not act. ' + prompt
-            result = await self.model(f'{prompt}\nPrior action outcomes: {dump(previous)}\nSubtask results: {dump(children)}', build_context(self.store), task, task['kind'] == 'dream' or bool(task['parentId']))
+            result = await self.model(f'{prompt}\nPrior action outcomes: {dump(previous)}\nSubtask results: {dump(children)}', build_context(self.store, task['prompt']), task, task['kind'] == 'dream' or bool(task['parentId']))
             if self.stopping or self.store.get_task(task['id'])['status'] == 'cancelled': return
             pending = any(a['taskId'] == task['id'] and a['status'] in BLOCKING_APPROVALS for a in self.store.list_approvals())
             self.store.update_task(task['id'], {'status': 'waiting_approval' if pending else 'completed', 'result': result, 'error': None})
