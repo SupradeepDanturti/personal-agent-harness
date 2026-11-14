@@ -34,7 +34,7 @@ async def sync_memory_files(store, workspace):
 CONTEXT_CHARACTER_LIMIT = 12000
 
 
-def build_context(store, query=''):
+def build_context_packet(store, query='', session_id=None):
     """Build a small reference packet; exact source retrieval remains available as a tool.
 
     Character limits are deterministic bounds, not token estimates. Recent turns,
@@ -51,18 +51,34 @@ def build_context(store, query=''):
     section('CURRENT GOALS', json.dumps([g for g in store.list_goals() if g['status'] == 'active']), 1200)
     people = PeopleGraph(store).context(query)
     if people['people']: section('USER-REVIEWED PEOPLE', json.dumps(people, ensure_ascii=False), 1200)
-    summary = store.get_setting('conversationSummary') or {}
+    summary_key = 'conversationSummary' if session_id in (None,'legacy') else 'conversationSummary:' + session_id
+    summary = store.get_setting(summary_key) or {}
     section('SUMMARY', summary.get('text', ''), 1200)
     memories = store.list_memories(query)[:8] or store.list_memories()[:5]
     section('CURATED MEMORY', '\n'.join(json.dumps({k: m[k] for k in ('id','text','provenance','sourceIds','confidence')}, ensure_ascii=False) for m in memories), 1800)
     # A bounded recent window; oversized turns leave room for other turns.
     recent = []
-    for message in store.list_messages(6):
+    recent_messages = store.list_messages(6, session_id=session_id)
+    for message in recent_messages:
         if message['role'] in ('user', 'assistant'):
             content = message['content']
             recent.append(f"{message['role'].upper()} [{message['id']}]: {content[:600]}" + (' [excerpt; use recall_read]' if len(content)>600 else ''))
     section('RECENT CONVERSATION', '\n'.join(recent), 4200)
+    matches = []
     if query.strip():
         matches = RecallIndex(store).search(query[:1000], limit=5)['results']
         section('RELEVANT RETAINED SOURCES (EXCERPTS)', '\n'.join(json.dumps(r, ensure_ascii=False) for r in matches), 2000)
-    return '\n\n'.join(parts)[:CONTEXT_CHARACTER_LIMIT]
+    context = '\n\n'.join(parts)[:CONTEXT_CHARACTER_LIMIT]
+    candidates = ([dict(id=m['id'],kind='message',title=m['role']+' conversation') for m in recent_messages]
+        + [dict(id=m['id'],kind='memory',title=m['kind']+' memory') for m in memories]
+        + [{k:r[k] for k in ('id','kind','title')} for r in matches])
+    seen = set(); sources = []
+    for source in candidates:
+        identity = (source['kind'],source['id'])
+        if identity not in seen and source['id'] in context:
+            sources.append(source); seen.add(identity)
+    return dict(text=context,characters=len(context),limit=CONTEXT_CHARACTER_LIMIT,sources=sources,modelCalls=0)
+
+
+def build_context(store, query='', session_id=None):
+    return build_context_packet(store,query,session_id)['text']

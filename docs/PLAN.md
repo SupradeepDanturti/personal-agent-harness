@@ -172,3 +172,42 @@ Primary platform references:
 
 This records requirements and the setup deferral, not a claim of Cloudflare
 runtime compatibility, deployed authentication or hosted persistence.
+
+
+## Owner-requested backlog: implement later
+
+The owner requested detailed issues and explicitly deferred implementing these
+features. Keep them as backlog until the owner resumes that work; do not treat
+the active general project goal as permission to silently start these items.
+
+- [#8 Agent-managed memory documents](https://github.com/Tenacious-3/personal-agent-harness/issues/8): the agent chooses and maintains multiple sourced files from conversations and events.
+- [#9 Daily local-time dreams](https://github.com/Tenacious-3/personal-agent-harness/issues/9): dated dream files at 3 a.m. in the user's location-based timezone, with DST/restart/catch-up behavior.
+- [#10 External assistant context import](https://github.com/Tenacious-3/personal-agent-harness/issues/10): copy a handoff prompt into ChatGPT/Claude/Other, paste the response into this harness, preview and import selected sourced context.
+
+Issues #9 and #10 depend on the tracked memory-document/provenance foundation
+in #8. Each issue records the current gaps, intended flow, implementation
+requirements, acceptance criteria and verification plan. #10 includes the
+initial copyable handoff prompt. Actual Cloudflare setup remains deferred too.
+
+
+## Chat workspace iteration
+
+The owner prioritized the dark conversation workspace and settings dialog from
+provided visual references before backlog issues #8–#10. The current branch adds
+an icon rail, searchable conversation sidebar, separate chat/activity panes and
+real settings for usage, appearance, connectors, approvals and data navigation.
+It also completes resumable conversations, bounded source/context details,
+reusable owner-saved research teams and a synthetic recall evaluation.
+
+Original historical message rows and their five-column schema remain unchanged;
+new conversations use a separate mapping. Archives are reversible and older
+messages use keyset pagination. Recent turns/summaries follow the selected chat;
+shared memory and explicit all-history recall remain available to the owner.
+Saved templates never run on save and cannot grant tool permissions. Token
+validation precedes connected views; current-session 401 responses return to a
+clear reconnect flow while late old responses cannot sign out a new session.
+
+Daily usage in Settings totals all durable usage rows for the UTC day, including
+active reservations and conservative failed-run charges. It does not invent a
+subscription plan, monetary price, wallet, voice-call connection or invite flow.
+The user-requested original local token must be preserved on Docker updates.

@@ -99,10 +99,12 @@ class UIAcceptance(unittest.TestCase):
                             expect(page.get_by_label("Message your assistant")).to_be_visible()
 
                             def navigate(name):
-                                page.get_by_role("navigation", name="Main navigation").get_by_role(
-                                    "button", name=name, exact=True).click()
-                                expect(page.get_by_role("heading", name=(
-                                    "What's on your mind?" if name == "Chat" else name), exact=True)).to_be_visible()
+                                navigation=page.get_by_role("navigation",name="Main navigation")
+                                target=navigation.get_by_role("button",name=name,exact=True)
+                                if not target.is_visible(): navigation.get_by_role("button",name="More tools",exact=True).click()
+                                target.click()
+                                if name=="Chat": expect(page.get_by_role("log",name="Conversation")).to_be_visible()
+                                else: expect(page.get_by_role("heading",name=name,exact=True)).to_be_visible()
                                 page.wait_for_load_state("networkidle")
 
                             for name in ("Chat", "Goals", "Memory", "History", "People", "Repairs",
@@ -213,10 +215,15 @@ class UIAcceptance(unittest.TestCase):
                             navigate("Inbox")
                             expect(page.locator(".record-list")).to_contain_text("Synthetic local acceptance result")
 
-                            page.get_by_role("button", name="Dark mode", exact=True).click()
-                            expect(page.get_by_role("button", name="Light mode", exact=True)).to_be_visible()
+                            page.get_by_role("button",name="Settings",exact=True).click()
+                            dialog=page.get_by_role("dialog",name="Settings",exact=True)
+                            dialog.get_by_role("button",name="Light",exact=True).click()
+                            dialog.get_by_role("button",name="Dark",exact=True).click()
+                            dialog.get_by_role("button",name="Close settings",exact=True).click()
                             page.reload()
-                            expect(page.get_by_role("button", name="Light mode", exact=True)).to_be_visible()
+                            page.get_by_role("button",name="Settings",exact=True).click()
+                            expect(dialog.get_by_role("button",name="Dark",exact=True)).to_have_attribute("aria-pressed","true")
+                            dialog.get_by_role("button",name="Close settings",exact=True).click()
                             navigate("Chat")
                             expect(page.get_by_text("Acceptance chat marker", exact=True)).to_be_visible()
                             self.assertEqual(errors, [], "JavaScript errors")

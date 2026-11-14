@@ -15,39 +15,103 @@ import {
 
 export function Workflows({ api }: { api: Api }) {
   const resource = useResource(api, "/workflows", true);
+  const templates = useResource(api, "/workflow-templates", true);
   const action = useAction(resource.reload);
+  const templateAction = useAction(templates.reload);
+  const [templateName, setTemplateName] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [templateAssignments, setTemplateAssignments] = useState<
+    { role: string; prompt: string }[]
+  >([]);
   const [prompt, setPrompt] = useState("");
   const [assignments, setAssignments] = useState(
     "Investigate the primary evidence and cite sources.\nInvestigate alternatives, risks and conflicting evidence.",
   );
-  const specialists = assignments
+  const specialists = templateAssignments.length ? templateAssignments : assignments
     .split("\n")
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((assignment, index) => ({ role: `Specialist ${index + 1}`, prompt: assignment }));
+  const validSpecialists = specialists.length >= 2 && specialists.length <= 4 &&
+    specialists.every((item) => item.role.trim() && item.role.length <= 100 &&
+      item.prompt.trim() && item.prompt.length <= 4000);
+  const savedTemplates = list(templates.data, "templates");
   const items = list(resource.data, "workflows");
   return (
     <>
       <Feedback
         loading={resource.loading}
-        error={resource.error || action.error}
+        error={resource.error || action.error || templates.error || templateAction.error}
+        notice={templateAction.notice}
       />
       <Card
         title="Give a team a goal"
         actions={<Refresh reload={resource.reload} />}
       >
         <div className="stack-form">
+          <label className="native-field">
+            Saved team template
+            <select
+              value={selectedTemplate}
+              disabled={templateAction.busy}
+              onChange={(event) => {
+                const id = event.target.value;
+                const template = savedTemplates.find((item) => txt(item.id) === id);
+                setSelectedTemplate(id);
+                setTemplateAssignments(template ? list(template, "specialists").map((item) => ({
+                  role: txt(item.role), prompt: txt(item.prompt),
+                })) : []);
+              }}
+            >
+              <option value="">New team</option>
+              {savedTemplates.map((item) => (
+                <option key={txt(item.id)} value={txt(item.id)}>{txt(item.name)}</option>
+              ))}
+            </select>
+          </label>
           <Area
             label="What should the team accomplish?"
             value={prompt}
             onChange={setPrompt}
             maxLength={6000}
           />
-          <Area
+          {!templateAssignments.length ? <Area
             label="Specialist assignments — one per line (2–4)"
             value={assignments}
             onChange={setAssignments}
             maxLength={12000}
-          />
+          /> : templateAssignments.map((item, index) => (
+            <div className="stack-form" key={index}>
+              <label className="native-field">
+                Specialist {index + 1} role
+                <input value={item.role} maxLength={100} onChange={(event) => {
+                  setTemplateAssignments((current) => current.map((entry, position) =>
+                    position === index ? { ...entry, role: event.target.value } : entry));
+                }} />
+              </label>
+              <Area label={`Specialist ${index + 1} assignment`} value={item.prompt}
+                maxLength={4000} onChange={(value) => setTemplateAssignments((current) =>
+                  current.map((entry, position) => position === index ? { ...entry, prompt: value } : entry))} />
+            </div>
+          ))}
+          <label className="native-field">
+            Template name
+            <input value={templateName} maxLength={80}
+              onChange={(event) => setTemplateName(event.target.value)} />
+          </label>
+          <Button label="Save team template" variant="secondary"
+            isDisabled={templateAction.busy || !templateName.trim() || !validSpecialists || savedTemplates.length >= 20}
+            onClick={() => void templateAction.run(async () => {
+              await api("/workflow-templates", { name: templateName.trim(), specialists });
+              setTemplateName("");
+            }, "Team template saved. Review and start it whenever you are ready.")} />
+          {selectedTemplate && <Button label="Remove selected template" variant="secondary"
+            isDisabled={templateAction.busy}
+            onClick={() => void templateAction.run(async () => {
+              await api(`/workflow-templates/${encodeURIComponent(selectedTemplate)}`, undefined, "DELETE");
+              setSelectedTemplate("");
+            }, "Team template removed.")} />}
+          <p>Templates save team assignments only. Review the team and enter a goal before starting a workflow.</p>
           <p>
             Specialists work in parallel. A verifier reviews their findings,
             then a synthesizer writes one answer. All agents use GPT-6 Luna with
@@ -59,17 +123,13 @@ export function Workflows({ api }: { api: Api }) {
             isDisabled={
               action.busy ||
               !prompt.trim() ||
-              specialists.length < 2 ||
-              specialists.length > 4
+              !validSpecialists
             }
             onClick={() =>
               void action.run(async () => {
                 await api("/workflows", {
                   prompt: prompt.trim(),
-                  specialists: specialists.map((assignment, index) => ({
-                    role: `Specialist ${index + 1}`,
-                    prompt: assignment,
-                  })),
+                  specialists,
                 });
                 setPrompt("");
               })

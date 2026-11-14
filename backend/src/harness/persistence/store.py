@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from harness.agents.workflows import validate_workflow, workflow_task_id
 from harness.knowledge.index import initialize_knowledge, forget_knowledge, invalidate_knowledge
+from harness.knowledge.sessions import initialize_sessions, ChatSessions, DEFAULT_SESSION_ID
 
 def _now(): return int(time.time()*1000)
 def _id(): return str(uuid.uuid4())
@@ -90,6 +91,7 @@ class LocalStore:
             CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,type TEXT NOT NULL,task_id TEXT,detail TEXT NOT NULL,created_at INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS usage(run_id TEXT PRIMARY KEY,day TEXT NOT NULL,reserved_tokens INTEGER NOT NULL,input_tokens INTEGER NOT NULL,output_tokens INTEGER NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
             CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status,created_at); CREATE INDEX IF NOT EXISTS idx_schedules_due ON schedules(status,next_run_at); CREATE INDEX IF NOT EXISTS idx_usage_day ON usage(day);''')
+            initialize_sessions(self.db)
             initialize_knowledge(self.db)
         except BaseException:
             self.db.close()
@@ -152,11 +154,25 @@ class LocalStore:
             if changed: self.db.execute("UPDATE settings SET value=CAST(CAST(value AS INTEGER)+1 AS TEXT) WHERE key='memory_revision'")
             return self.revision()
         return self._tx(work)
-    def add_message(self,role,content,run_id=None):
+    def add_message(self,role,content,run_id=None,session_id=DEFAULT_SESSION_ID):
         if role not in ('user','assistant','system','tool'): raise ValueError('Invalid message role')
-        m=dict(id=_id(),role=role,content=_req(content,'Message',200000),runId=run_id,createdAt=_now()); self.db.execute('INSERT INTO messages VALUES (?,?,?,?,?)',(m['id'],role,m['content'],run_id,m['createdAt'])); return m
-    def list_messages(self,limit=100):
-        return [dict(id=r['id'],role=r['role'],content=r['content'],runId=r['run_id'],createdAt=r['created_at']) for r in reversed(self._rows('SELECT * FROM messages ORDER BY created_at DESC,rowid DESC LIMIT ?',max(1,min(1000,limit))))]
+        def work():
+            session=ChatSessions(self).active(session_id)
+            m=dict(id=_id(),role=role,content=_req(content,'Message',200000),runId=run_id,createdAt=_now())
+            self.db.execute('INSERT INTO messages VALUES (?,?,?,?,?)',(m['id'],role,m['content'],run_id,m['createdAt']))
+            self.db.execute('INSERT INTO chat_message_sessions VALUES (?,?)',(m['id'],session_id))
+            first_user=role=='user' and session_id!=DEFAULT_SESSION_ID and session['title']=='New conversation' and not self.db.execute('SELECT 1 FROM chat_message_sessions WHERE session_id=? AND message_id!=? LIMIT 1',(session_id,m['id'])).fetchone()
+            title=(' '.join(''.join(c if ord(c)>=32 else ' ' for c in m['content'].splitlines()[0]).split())[:80] or 'New conversation') if first_user else session['title']
+            self.db.execute('UPDATE chat_sessions SET title=?,updated_at=? WHERE id=?',(title,m['createdAt'],session_id))
+            return m
+        return self._tx(work)
+    def list_messages(self,limit=100,session_id=None):
+        params=[]; where=''
+        if session_id is not None:
+            ChatSessions(self).get(session_id)
+            where='WHERE coalesce(s.session_id,?)=?'; params=[DEFAULT_SESSION_ID,session_id]
+        rows=self._rows('SELECT m.* FROM messages m LEFT JOIN chat_message_sessions s ON s.message_id=m.id '+where+' ORDER BY m.created_at DESC,m.rowid DESC LIMIT ?',*params,max(1,min(1000,limit)))
+        return [dict(id=r['id'],role=r['role'],content=r['content'],runId=r['run_id'],createdAt=r['created_at']) for r in reversed(rows)]
     def save_memory(self,input):
         text=_req(input['text'],'Memory',4000); source=_req(input['source'],'Memory source',1000); prov=input['provenance']; kind=input.get('kind','fact'); conf=input.get('confidence',1 if prov=='explicit' else .7); ids=input.get('sourceIds',[source])
         if prov not in ('explicit','inferred') or kind not in ('preference','project','person','goal','commitment','fact') or not 0<=conf<=1 or not ids or any(not isinstance(x,str) or not x.strip() for x in ids): raise ValueError('Invalid memory')
@@ -187,12 +203,15 @@ class LocalStore:
             if not r: raise ValueError('Memory not found')
             m=self._memory(r); lineage=self.memory_lineage(id); phrases={m['text'],*(v['snapshot']['text'] for v in lineage)}
             forget_knowledge(self.db, m, phrases, m['sourceIds'] if include_source_messages else ())
+            if self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='workflow_templates'").fetchone():
+                from harness.agents.templates import WorkflowTemplates
+                WorkflowTemplates(self).forget_claims(phrases)
             for p in phrases:
                 if self._rows("SELECT id FROM approvals WHERE status='executing' AND (instr(payload,?)>0 OR instr(result,?)>0)",p,p): raise ValueError('Cannot forget a claim while a related action is executing; wait for the outcome')
-            self.db.execute('DELETE FROM memories WHERE id=?',(id,)); self.db.execute('DELETE FROM memory_versions WHERE memory_id=?',(id,)); self.db.execute("DELETE FROM settings WHERE key IN ('conversationSummary','alignmentSynthesis') OR key LIKE 'dream:%'")
+            self.db.execute('DELETE FROM memories WHERE id=?',(id,)); self.db.execute('DELETE FROM memory_versions WHERE memory_id=?',(id,)); self.db.execute("DELETE FROM settings WHERE key IN ('conversationSummary','alignmentSynthesis') OR key LIKE 'conversationSummary:%' OR key LIKE 'dream:%'")
             for p in phrases:
                 if not p: continue
-                for table,cols in [('tasks',['prompt','result','error']),('notifications',['title','body']),('goals',['title','description'])]:
+                for table,cols in [('tasks',['prompt','result','error']),('notifications',['title','body']),('goals',['title','description']),('chat_sessions',['title'])]:
                     for c in cols: self.db.execute(f"UPDATE {table} SET {c}=replace({c},?,'[forgotten]') WHERE instr({c},?)>0",(p,p))
                 for goal in self._rows('SELECT id,steps FROM goals'):
                     steps=json.loads(goal['steps'])
@@ -385,6 +404,17 @@ class LocalStore:
         if r['status']!='reserved': raise ValueError('Usage reservation already settled')
         self.db.execute("UPDATE usage SET input_tokens=?,output_tokens=?,status='completed',updated_at=? WHERE run_id=? AND status='reserved'",(input_tokens,output_tokens,_now(),run_id)); return self._usage(self.db.execute('SELECT * FROM usage WHERE run_id=?',(run_id,)).fetchone())
     def fail_usage(self,run_id): self.db.execute("UPDATE usage SET input_tokens=reserved_tokens,output_tokens=0,status='failed',updated_at=? WHERE run_id=? AND status='reserved'",(_now(),run_id))
+    def usage_summary(self):
+        day=datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        row=self.db.execute("""SELECT
+          coalesce(sum(CASE WHEN status='reserved' THEN reserved_tokens ELSE input_tokens+output_tokens END),0) AS charged,
+          coalesce(sum(CASE WHEN status='reserved' THEN reserved_tokens ELSE 0 END),0) AS reserved,
+          coalesce(sum(CASE WHEN status='completed' THEN input_tokens ELSE 0 END),0) AS input,
+          coalesce(sum(CASE WHEN status='completed' THEN output_tokens ELSE 0 END),0) AS output,
+          coalesce(sum(CASE WHEN status='failed' THEN input_tokens+output_tokens ELSE 0 END),0) AS failed
+          FROM usage WHERE day=?""",(day,)).fetchone()
+        return dict(day=day,chargedTokens=row['charged'],reservedTokens=row['reserved'],
+                    inputTokens=row['input'],outputTokens=row['output'],failedTokens=row['failed'])
     def list_usage(self,limit=100): return [self._usage(r) for r in self._rows('SELECT * FROM usage ORDER BY created_at DESC,rowid DESC LIMIT ?',max(1,min(1000,limit)))]
 
 def _walk_keys(v):

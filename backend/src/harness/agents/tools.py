@@ -10,7 +10,7 @@ OPERATIONS = (
     "browser_read", "memory_search", "goals", "files", "skills", "gmail_read",
     "calendar_read", "propose_action", "delegate", "workflow", "notify",
     "schedule_cron", "complete_goal_step",
-    "history_search", "people_search", "provider_read", "sheets_read", "recall_search", "recall_read", "mcp_list", "mcp_read",
+    "history_search", "people_search", "provider_read", "sheets_read", "recall_search", "recall_read", "mcp_list", "mcp_read", "workflow_templates",
 )
 
 
@@ -63,7 +63,8 @@ def _build_tools(caps: AgentCapabilities, function_tool: Any, WebSearchTool: Any
             "propose_action:{kind:browser.click|browser.fill|gmail.send|calendar.create|sheets.update|workspace.execute|skill.save|slack.send|mastodon.publish|mcp.call,payload:{...},summary}; "
             "sheets.update payload:{sheetId:registered-or-discovered-handle,range?:boundedA1,values:JSONrows}; uses literal RAW cells and requires exact approval. "
             "slack.send payload:{channel:exactConversationId,text}; mastodon.publish payload:{text,visibility:public|unlisted|private|direct}. "
-            "delegate:{prompt}; workflow:{action:create|list,prompt?,specialists?:[{role,prompt}]}; "
+            "workflow_templates:{id?,offset?} lists owner-saved team IDs and roles; supply id to inspect one specialist assignment at a time. "
+            "delegate:{prompt}; workflow:{action:create|list,prompt?,templateId?,specialists?:[{role,prompt}]}; "
             "notify:{title,body}; schedule_cron:{prompt,cron,timezone}; complete_goal_step:{goalId,stepId,result}. "
             "External writes only propose an action; they are not executed until the user approves the exact payload. "
             "Browser actions require tabId, selector and observed page URL; fill also value. Never put passwords, "
@@ -72,7 +73,7 @@ def _build_tools(caps: AgentCapabilities, function_tool: Any, WebSearchTool: Any
         async def operation_tool(
             operation: Literal["browser_read", "memory_search", "goals", "files", "skills", "gmail_read",
                                "calendar_read", "propose_action", "delegate", "workflow", "notify",
-                               "schedule_cron", "complete_goal_step", "history_search", "people_search", "provider_read", "sheets_read", "recall_search", "recall_read", "mcp_list", "mcp_read"],
+                               "schedule_cron", "complete_goal_step", "history_search", "people_search", "provider_read", "sheets_read", "recall_search", "recall_read", "mcp_list", "mcp_read", "workflow_templates"],
             argumentsJson: str,
         ) -> Any:
             if len(argumentsJson) > 16000:

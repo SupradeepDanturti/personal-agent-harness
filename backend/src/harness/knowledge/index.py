@@ -46,7 +46,7 @@ def initialize_knowledge(db):
 
 def invalidate_knowledge(db, memory_id):
     """A corrected source cannot silently keep feeding old graph context."""
-    db.execute("DELETE FROM settings WHERE key IN ('conversationSummary','alignmentSynthesis')")
+    db.execute("DELETE FROM settings WHERE key IN ('conversationSummary','alignmentSynthesis') OR key LIKE 'conversationSummary:%'")
     for row in db.execute('SELECT * FROM people_nodes').fetchall():
         if {memory_id,'memory:'+memory_id}.intersection(json.loads(row['source_ids'])):
             db.execute('UPDATE people_nodes SET needs_review=1,revision=revision+1,updated_at=? WHERE id=?',(now(),row['id']))

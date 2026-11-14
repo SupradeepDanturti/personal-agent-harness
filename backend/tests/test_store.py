@@ -25,6 +25,20 @@ class StoreTests(unittest.TestCase):
                 LocalStore(':memory:')
         connection.close.assert_called_once()
 
+    def test_daily_usage_totals_include_all_runs_and_reservations(self):
+        for i in range(105):
+            self.store.reserve_usage(f'completed-{i}',100000,100)
+            self.store.finish_usage(f'completed-{i}',3,2)
+        self.store.reserve_usage('pending-budget',100000,100)
+        self.store.reserve_usage('unknown-outcome',100000,100)
+        self.store.fail_usage('unknown-outcome')
+        summary=self.store.usage_summary()
+        self.assertEqual(summary['chargedTokens'],725)
+        self.assertEqual(summary['reservedTokens'],100)
+        self.assertEqual(summary['inputTokens'],315)
+        self.assertEqual(summary['outputTokens'],210)
+        self.assertEqual(summary['failedTokens'],100)
+
     def tearDown(self):
         self.store.close()
         for attempt in range(8):

@@ -8,10 +8,10 @@
       (() => {
         let mode;
         try { mode = localStorage.getItem('harness-color-mode'); } catch {}
-        if (mode !== 'light' && mode !== 'dark') mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        if (mode !== 'light' && mode !== 'dark') mode = 'dark';
         document.documentElement.dataset.theme = mode;
         document.documentElement.style.colorScheme = mode;
-        document.querySelector('meta[name="theme-color"]').content = mode === 'dark' ? '#141814' : '#fbfcf9';
+        document.querySelector('meta[name="theme-color"]').content = mode === 'dark' ? '#191919' : '#f6f5f3';
       })();
     </script>
     <title>Personal Harness</title>

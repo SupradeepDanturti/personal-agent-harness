@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from starlette.responses import JSONResponse, Response
 
 from harness.core.utils import text, dump, safe_error
-from harness.knowledge.memory import build_context
+from harness.knowledge.memory import build_context, build_context_packet
 
 
 async def dispatch(runtime, method, path, body=None, query=None):
@@ -19,6 +19,10 @@ async def dispatch(runtime, method, path, body=None, query=None):
             await runtime.google.complete_auth(query.get('code', ''), query.get('state', ''))
             return Response('Google connected. Return to the assistant Connections tab.', media_type='text/plain')
         if method == 'GET':
+            if route == '/chat-sessions': return JSONResponse({'sessions':runtime.chats.list(query.get('archived')=='true'), 'defaultSessionId':'legacy', 'modelConfigured':bool(runtime.config.api_key)})
+            if re.fullmatch(r'/chat-sessions/[^/]+/messages',route): return JSONResponse(runtime.chats.messages(id_,query.get('before')))
+            if route == '/workflow-templates': return JSONResponse({'templates':runtime.templates.list()})
+
             if route == '/mcp': return JSONResponse({'connections': await runtime.mcp.status()})
             if route == '/recall/item': return JSONResponse(runtime.recall.read(query.get('kind'), query.get('id')))
             if route == '/history/index': return JSONResponse(runtime.history_index.status())
@@ -29,7 +33,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
             if route == '/status': return JSONResponse(dict(local=True, backend='python', runtimeId=runtime.instance_id, model=runtime.config.model,
                 activity=dict(activeTasks=len(runtime.active), chatBusy=runtime.chat_busy, queuedTasks=sum(t['status'] == 'queued' for t in runtime.store.list_tasks(500))),
                 capabilities=dict(browser=await runtime.browser.status(), google=await runtime.google.status(), workspace=True, docker=runtime.config.docker_enabled),
-                budget=dict(dailyTokenLimit=runtime.config.daily_token_limit, perRunReservation=runtime.config.run_token_reservation, usage=runtime.store.list_usage())))
+                budget=dict(dailyTokenLimit=runtime.config.daily_token_limit, perRunReservation=runtime.config.run_token_reservation, summary=runtime.store.usage_summary(), usage=runtime.store.list_usage())))
             if route == '/history': return JSONResponse({'messages': runtime.store.list_messages(500)})
             if route == '/memories': return JSONResponse(dict(memories=runtime.store.list_memories(query.get('query')), revision=runtime.store.revision()))
             if re.fullmatch(r'/memories/[^/]+/lineage', route): return JSONResponse({'lineage': runtime.store.memory_lineage(id_)})
@@ -54,6 +58,8 @@ async def dispatch(runtime, method, path, body=None, query=None):
                 return JSONResponse(file)
             if route == '/settings': return JSONResponse({'timezone': runtime.store.get_setting('timezone') or 'America/Toronto', 'nightlyDreamEnabled': runtime.store.get_setting('nightlyDreamEnabled') is not False})
         if method == 'POST':
+            if route == '/chat-sessions': return JSONResponse(runtime.chats.create(body),201)
+            if route == '/workflow-templates': return JSONResponse(runtime.templates.save(body),201)
             if route == '/mcp': return JSONResponse(await runtime.mcp.save(body), 201)
             mcp_match = re.fullmatch(r'/mcp/([^/]+)/(test|grants)', route)
             if mcp_match:
@@ -88,13 +94,18 @@ async def dispatch(runtime, method, path, body=None, query=None):
                 if runtime.chat_busy: return JSONResponse({'error': 'A chat turn is already running'}, 409)
                 message = text(body.get('message')).strip()
                 if not message or len(message) > 12000: raise ValueError('Message must have 1-12000 characters')
-                runtime.chat_busy = True
+                session_id = body.get('sessionId','legacy')
+                runtime.chats.active(session_id)
+                runtime.chat_busy = True; runtime.active_chat_session = session_id
                 try:
-                    runtime.store.add_message('user', message)
-                    result = await runtime.model(message, build_context(runtime.store, message))
-                    runtime.store.add_message('assistant', result); await runtime.project_memory()
-                    return JSONResponse({'message': result})
-                finally: runtime.chat_busy = False
+                    runtime.store.add_message('user',message,session_id=session_id)
+                    packet = build_context_packet(runtime.store,message,session_id=session_id)
+                    result = await runtime.model(message,packet['text'])
+                    runtime.store.add_message('assistant',result,session_id=session_id)
+                    await runtime.project_memory()
+                    return JSONResponse({'message':result,'sessionId':session_id,'context':{k:v for k,v in packet.items() if k!='text'}})
+                finally:
+                    runtime.chat_busy = False; runtime.active_chat_session = None
             if route == '/memories':
                 memory = runtime.store.save_memory(dict(text=text(body.get('text')), kind=body.get('kind') or 'fact', source='user', provenance='explicit'))
                 await runtime.project_memory(); return JSONResponse(memory, 201)
@@ -141,7 +152,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
                 if text(body.get('path')).startswith('memory/'): raise ValueError('Managed memory files must be edited in Memory')
                 return JSONResponse(await runtime.workspace.write(text(body.get('path')), text(body.get('content'))), 201)
             if route == '/connections/google/start': return JSONResponse({'url': runtime.google.begin_auth()['url']})
-            if route == '/context/compact': return JSONResponse(await runtime.compact_history())
+            if route == '/context/compact': return JSONResponse(await runtime.compact_history(body.get('sessionId','legacy')))
             if route == '/dreams/apply':
                 task_id = text(body.get('taskId')); task = runtime.store.get_task(task_id); snapshot = runtime.store.get_setting(f'dream:{task_id}')
                 if not task or task['kind'] != 'dream' or task['status'] != 'completed' or not snapshot: raise ValueError('Completed dream required')
@@ -152,6 +163,11 @@ async def dispatch(runtime, method, path, body=None, query=None):
                 if not re.fullmatch(r'[\w.-]{1,100}', key, flags=re.ASCII): raise ValueError('A stable eventId is required')
                 return JSONResponse(runtime.store.create_task(dict(id=f'hook-{key}', prompt=text(body.get('prompt')), kind='task')), 202)
         if method == 'PATCH':
+            if re.fullmatch(r'/chat-sessions/[^/]+',route):
+                if runtime.chat_busy and runtime.active_chat_session==id_ and body.get('archived') is True:
+                    return JSONResponse({'error':'Wait for the current reply before archiving this conversation'},409)
+                return JSONResponse(runtime.chats.update(id_,body))
+
             if route == '/google/sheets/discovery': return JSONResponse(await runtime.sheets.discovery(body.get('enabled')))
             if re.fullmatch(r'/people/[^/]+',route): return JSONResponse(runtime.people.save(body,id_))
             if re.fullmatch(r'/repairs/[^/]+',route): return JSONResponse(runtime.repairs.transition(id_,body))
@@ -167,6 +183,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
                     if not body['nightlyDreamEnabled']: runtime.store.delete_schedule('nightly-dream')
                 return JSONResponse({'ok': True})
         if method == 'DELETE':
+            if re.fullmatch(r'/workflow-templates/[^/]+',route): return JSONResponse({'deleted':runtime.templates.delete(id_)})
             if re.fullmatch(r'/mcp/[^/]+', route): return JSONResponse(await runtime.mcp.remove(id_))
             sheet_match = re.fullmatch(r'/google/sheets/([^/]+)', route)
             if sheet_match: return JSONResponse(await runtime.sheets.remove(sheet_match[1]))

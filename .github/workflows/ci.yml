@@ -46,6 +46,14 @@ jobs:
       - name: Exercise MCP approval UI with a synthetic local server
         working-directory: .
         run: uv run --locked --directory backend python -u -m tests.ui_mcp_acceptance
+      - name: Exercise resumable conversations and reusable teams
+        working-directory: .
+        run: uv run --locked --directory backend python -u -m tests.ui_sessions_acceptance
+      - name: Exercise authentication and workspace settings
+        working-directory: .
+        run: |
+          uv run --locked --directory backend python -u -m tests.ui_auth_acceptance
+          uv run --locked --directory backend python -u -m tests.ui_workspace_acceptance
   backend:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

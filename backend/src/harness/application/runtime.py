@@ -22,6 +22,8 @@ from harness.scheduling.proactivity import select_update
 from harness.scheduling.cron import next_cron_time, next_interval_time
 from harness.persistence.store import LocalStore
 from harness.agents.workflows import research_workflow, workflow_task_id
+from harness.agents.templates import WorkflowTemplates
+from harness.knowledge.sessions import ChatSessions
 from harness.workspace.files import WorkspaceService
 from harness.knowledge.index import HistoryIndex, PeopleGraph, RepairQueue
 from harness.integrations.providers import ProviderRegistry
@@ -33,7 +35,7 @@ from harness.core.utils import now_ms, text, dump, safe_error
 
 
 WRITES = {'browser.click', 'browser.fill', 'gmail.send', 'calendar.create', 'sheets.update', 'workspace.execute', 'skill.save', 'slack.send', 'mastodon.publish', 'mcp.call'}
-READ_ONLY = {'browser_read', 'memory_search', 'history_search', 'recall_search', 'recall_read', 'people_search', 'provider_read', 'skills', 'gmail_read', 'calendar_read', 'sheets_read', 'mcp_list', 'mcp_read'}
+READ_ONLY = {'browser_read', 'memory_search', 'history_search', 'recall_search', 'recall_read', 'people_search', 'provider_read', 'skills', 'gmail_read', 'calendar_read', 'sheets_read', 'mcp_list', 'mcp_read', 'workflow_templates'}
 BLOCKING_APPROVALS = {'pending', 'approved', 'executing', 'uncertain'}
 
 
@@ -51,6 +53,8 @@ class Runtime:
             f'http://127.0.0.1:{config.port}/oauth/google/callback', config.data_dir / 'credentials' / 'google.enc', config.encryption_secret)
         self.sheets = GoogleSheets(self.store, self.google)
         self.workspace = workspace or WorkspaceService(config.data_dir / 'workspace', docker_enabled=config.docker_enabled, docker_image=config.docker_image)
+        self.chats = ChatSessions(self.store)
+        self.templates = WorkflowTemplates(self.store)
         self.history_index = HistoryIndex(self.store)
         self.recall = RecallIndex(self.store)
         self.people = PeopleGraph(self.store)
@@ -62,6 +66,7 @@ class Runtime:
         self.active = {}
         self.model_tasks = {}
         self.chat_busy = False
+        self.active_chat_session = None
         self.stopping = False
         self.ticking = False
         self.privacy_epoch = 0
@@ -181,6 +186,13 @@ class Runtime:
         task_id = task['id'] if task else None
         self.store.append_event('tool.requested', {'operation': operation, 'action': args.get('action')}, task_id)
         action = args.get('action')
+        if operation == 'workflow_templates':
+            if args.get('id'):
+                template=self.templates.select(args['id']); offset=args.get('offset',0)
+                if type(offset) is not int or not 0<=offset<len(template['specialists']): raise ValueError('Invalid specialist offset')
+                return {'id':template['id'],'name':template['name'],'specialists':template['specialists'][offset:offset+1],
+                    'nextOffset':offset+1 if offset+1<len(template['specialists']) else None}
+            return {'templates':[{'id':t['id'],'name':t['name'],'roles':[a['role'] for a in t['specialists']]} for t in self.templates.list()]}
         if operation == 'workflow':
             if task and task.get('parentId'): raise ValueError('Child agents cannot create workflows')
             if action == 'list': return {'workflows': [self.workflow_view(w) for w in self.store.list_workflows()]}
@@ -345,7 +357,12 @@ class Runtime:
 
     def create_workflow(self, body):
         if sum(self.store.get_task(w['id'])['status'] in ('queued', 'running') for w in self.store.list_workflows()) >= 5: raise ValueError('Too many active workflows')
-        definition = research_workflow(text(body.get('prompt')), body.get('specialists')) if 'nodes' not in body else body
+        if 'templateId' in body:
+            if set(body)-{'prompt','templateId'}: raise ValueError('Choose a saved template or supply custom specialists')
+            template = self.templates.select(body['templateId'])
+            definition = research_workflow(text(body.get('prompt')),template['specialists'])
+        else:
+            definition = research_workflow(text(body.get('prompt')), body.get('specialists')) if 'nodes' not in body else body
         workflow = self.store.create_workflow(definition)
         self.store.append_event('workflow.created', {'nodes': [{k: n[k] for k in ('id', 'role', 'dependsOn')} for n in workflow['nodes']]}, workflow['id'])
         return self.workflow_view(workflow)
@@ -464,13 +481,19 @@ class Runtime:
             self.repairs.create('task', 'task:'+task['id'], safe_error(error) or 'Task failed')
             if not task['parentId'] or not self.store.get_workflow(task['parentId']): self.store.add_notification(dict(title='Task failed', body=safe_error(error), taskId=task['id'], dedupeKey=f"task-failed:{task['id']}:{task['attempts']}"))
 
-    async def compact_history(self):
-        older = self.store.list_messages(200)[:-20]
+    async def compact_history(self, session_id='legacy'):
+        self.chats.get(session_id)
+        older = self.store.list_messages(200, session_id=session_id)[:-20]
         if len(older) < 20: return {'compacted': False, 'reason': 'Not enough older history'}
-        latest_id = older[-1]['id']; prior = self.store.get_setting('conversationSummary') or {}
+        latest_id = older[-1]['id']; summary_key = 'conversationSummary' if session_id=='legacy' else 'conversationSummary:'+session_id
+        revision = self.store.revision()
+        before = [(m['id'],m['content']) for m in older]
+        prior = self.store.get_setting(summary_key) or {}
         if prior.get('lastMessageId') == latest_id: return {'compacted': False, 'reason': 'Already summarized'}
         result = await self.model('Summarize earlier conversation as reference data. Preserve commitments, corrections, unresolved questions and source message IDs. Do not infer preferences.', dump({'previous': prior.get('text'), 'messages': older})[:22000], read_only=True, no_tools=True)
-        self.store.set_setting('conversationSummary', dict(text=result, lastMessageId=latest_id, sourceIds=[m['id'] for m in older], createdAt=now_ms()))
+        if revision != self.store.revision() or before != [(m['id'],m['content']) for m in self.store.list_messages(200,session_id=session_id)[:-20]]:
+            raise ValueError('Conversation changed during compaction; try again')
+        self.store.set_setting(summary_key, dict(text=result, lastMessageId=latest_id, sourceIds=[m['id'] for m in older], createdAt=now_ms()))
         return {'compacted': True, 'text': result}
 
     async def search_history(self, query, semantic=False):
