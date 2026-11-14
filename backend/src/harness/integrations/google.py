@@ -1,7 +1,7 @@
 """Google Gmail and Calendar connector using Google's raw HTTP APIs.
 
-Credentials are stored in a small AES-GCM envelope compatible with the local
-TypeScript connector's version-1 vault format.
+New credentials use dcrypt text envelopes. Legacy AES-GCM/TypeScript version-1
+vaults remain readable and migrate on the next successful save.
 """
 from __future__ import annotations
 
@@ -24,6 +24,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from harness.integrations.credentials import CredentialCipher
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -55,6 +57,7 @@ class GoogleConnector:
         self.redirect_uri = redirect_uri
         self.vault_path = Path(vault_path)
         self._key = hashlib.sha256(encryption_secret.encode("utf-8")).digest()
+        self._cipher = CredentialCipher(encryption_secret)
         self._client = http_client or httpx.AsyncClient(transport=transport, timeout=20.0)
         self._owns_client = http_client is None
         self._pending: dict[str, tuple[str, float]] = {}
@@ -66,13 +69,18 @@ class GoogleConnector:
     async def _load(self) -> dict[str, Any] | None:
         try:
             envelope = json.loads(await asyncio.to_thread(self.vault_path.read_text, "utf-8"))
-            iv = base64.b64decode(envelope["iv"], validate=True)
-            tag = base64.b64decode(envelope["tag"], validate=True)
-            encrypted = base64.b64decode(envelope["encrypted"], validate=True)
-            if len(iv) != 12 or len(tag) != 16:
-                raise ValueError("bad envelope")
-            plaintext = AESGCM(self._key).decrypt(iv, encrypted + tag, None)
-            tokens = json.loads(plaintext.decode("utf-8"))
+            if envelope.get("version") == 2:
+                tokens = await asyncio.to_thread(self._cipher.open, envelope, "google")
+            else:
+                if envelope.get("version") != 1:
+                    raise ValueError("Unsupported credential envelope")
+                iv = base64.b64decode(envelope["iv"], validate=True)
+                tag = base64.b64decode(envelope["tag"], validate=True)
+                encrypted = base64.b64decode(envelope["encrypted"], validate=True)
+                if len(iv) != 12 or len(tag) != 16:
+                    raise ValueError("bad envelope")
+                plaintext = AESGCM(self._key).decrypt(iv, encrypted + tag, None)
+                tokens = json.loads(plaintext.decode("utf-8"))
             if not isinstance(tokens, dict) or not isinstance(tokens.get("access_token"), str):
                 raise ValueError("bad credential payload")
             return tokens
@@ -82,11 +90,7 @@ class GoogleConnector:
             raise RuntimeError("Cannot unlock saved Google credentials. Restore the original credential key or reconnect Google.") from exc
 
     async def _save(self, tokens: dict[str, Any]) -> None:
-        iv = secrets.token_bytes(12)
-        sealed = AESGCM(self._key).encrypt(iv, json.dumps(tokens, separators=(",", ":")).encode("utf-8"), None)
-        envelope = {"version": 1, "iv": base64.b64encode(iv).decode(),
-                    "tag": base64.b64encode(sealed[-16:]).decode(),
-                    "encrypted": base64.b64encode(sealed[:-16]).decode()}
+        envelope = await asyncio.to_thread(self._cipher.seal, tokens, "google")
         body = json.dumps(envelope, separators=(",", ":"))
         await asyncio.to_thread(self._atomic_write, body)
 

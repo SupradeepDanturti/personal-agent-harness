@@ -7,7 +7,7 @@ Regenerate it after documentation changes with `uv run --directory backend pytho
 
 The [knowledge and providers expansion](docs/KNOWLEDGE-AND-PROVIDERS.md) adds
 History, People, Repairs and Evidence screens plus configurable Slack, Mastodon,
-Spotify, Shopify product reads and Home Assistant state reads. Authorize each
+Shopify product reads and Home Assistant state reads. Authorize each
 provider separately; sends/posts require the existing approval flow.
 
 A local-first personal assistant using **OpenAI Agents SDK for Python + GPT-6 Luna only**,
@@ -111,6 +111,14 @@ macOS/Linux; `Copy-Item` in PowerShell). Set `OPENAI_API_KEY` and a random
 encrypted Google credentials: unless `CREDENTIAL_KEY` is configured, the token
 also protects the vault. For bundled Chromium, set `BROWSER_CHANNEL=chromium`.
 
+New Google/provider credential files use Python `dcrypt` text encryption. Its
+RSA key bundle is encrypted with your existing credential secret; no unencrypted
+private-key file is saved. Existing AES-GCM vaults remain readable and move to
+the new format on their next successful save. Keep the original credential key:
+older app versions cannot read the new format, so back up state before upgrading
+if you need to roll back. `cryptography` remains an updated dependency of this
+integration and supplies legacy decryption and key protection.
+
 ```bash
 npm --prefix frontend run check
 uv run --directory backend python -m unittest discover -s tests -t . -v
@@ -144,7 +152,7 @@ vault and the assistant browser profile are preserved.
 | Background | Durable queue, bounded subtasks, restart recovery, one-shot/interval/timezone cron, stable event-hook IDs |
 | Delivery | Durable inbox, repeat suppression/source-observation gate for selective research schedules; desktop notices while Inbox is open |
 | Actions | Exact immutable payload/digest/expiry, accept/reject, one execution claim, uncertain-outcome reconciliation |
-| Connections | Google OAuth; encrypted grants for Slack, Mastodon, Spotify, Shopify product reads and Home Assistant state reads; reviewed writes only where supported |
+| Connections | Google OAuth; encrypted grants for Slack, Mastodon, Shopify product reads and Home Assistant state reads; reviewed writes only where supported |
 | Workspace | Confined text/Markdown/CSV/JSON/HTML artifacts and reviewed procedures; optional Docker-only scripts |
 
 There is no fallback to a different model. Model-based semantic ranking and
@@ -220,7 +228,7 @@ returned to the model or status APIs.
 Requested scopes cover Gmail read/send and Calendar events. Sending email and
 creating events still require a separate exact action approval inside the app.
 Google consent does not activate other services. Additional Slack, Mastodon,
-Spotify, Shopify and Home Assistant adapters need their own authorization in
+Shopify and Home Assistant adapters need their own authorization in
 Connections. Instagram, Threads, WhatsApp and health integrations remain open.
 
 ## Files, procedures and execution

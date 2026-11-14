@@ -45,7 +45,7 @@ async def main():
             report=await api('POST','/freshness/verify',dict(text=marker+' has no source citation'))
             assert report['selected'] is False,'Unsourced update was not held'
             providers=await api('GET','/connections')
-            assert {p['provider'] for p in providers['providers']}=={'slack','mastodon','spotify','shopify','homeassistant'}
+            assert {p['provider'] for p in providers['providers']}=={'slack','mastodon','shopify','homeassistant'}
             assert all('access_token' not in p for p in providers['providers']),'Provider status exposed credentials'
             print('Repair review/evidence, unsourced-update hold and credential-free provider catalogue passed.')
         finally:

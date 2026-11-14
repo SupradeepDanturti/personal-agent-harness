@@ -24,7 +24,6 @@ class Config:
     docker_image: str = 'python:3.12-slim'
     daily_token_limit: int = 200000
     run_token_reservation: int = 100000
-    spotify_client_id: str = ''
     mastodon_base_url: str = ''
     shopify_store: str = ''
     homeassistant_base_url: str = ''
@@ -56,5 +55,5 @@ def load_config(root: Path | str | None = None) -> Config:
                   browser_executable=get('BROWSER_EXECUTABLE_PATH') or None, browser_channel=get('BROWSER_CHANNEL') or None,
                   docker_enabled=get('ENABLE_DOCKER_EXECUTION') == 'true', docker_image=get('DOCKER_IMAGE', 'python:3.12-slim'),
                   daily_token_limit=int(get('DAILY_TOKEN_LIMIT', '200000')), run_token_reservation=int(get('RUN_TOKEN_RESERVATION', '100000')),
-                  spotify_client_id=get('SPOTIFY_CLIENT_ID'), mastodon_base_url=get('MASTODON_BASE_URL'),
+                  mastodon_base_url=get('MASTODON_BASE_URL'),
                   shopify_store=get('SHOPIFY_STORE'), homeassistant_base_url=get('HOME_ASSISTANT_BASE_URL'))

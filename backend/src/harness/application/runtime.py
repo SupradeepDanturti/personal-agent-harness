@@ -351,10 +351,7 @@ class Runtime:
                 next_ = next_cron_time(schedule['cron'], schedule['timezone'], now) if schedule['cron'] else next_interval_time(schedule['nextRunAt'], schedule['intervalSeconds'], now) if schedule['intervalSeconds'] else None
                 self.store.dispatch_occurrence(schedule['id'], now, next_)
             self.advance_workflows()
-            candidates = {t['id']: t for t in reversed(self.store.list_tasks(500))}
-            for workflow in self.store.list_workflows():
-                candidates.update({t['id']: t for t in self.store.workflow_tasks(workflow['id'])})
-            for task in candidates.values():
+            for task in self.store.iter_queued_tasks():
                 if len(self.active) >= 2: break
                 if task['status'] != 'queued' or not self.workflow_ready(task) or task['id'] in self.active: continue
                 if (self.active or self.chat_busy) and not self.store.has_usage_capacity(self.config.daily_token_limit, self.config.run_token_reservation): break

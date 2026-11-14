@@ -60,7 +60,9 @@ class GoogleConnectorTests(OfflineAsyncCase):
         self.assertIn("gmail.readonly", auth["url"])
         self.assertEqual(await c.complete_auth("code-value", auth["state"]), {"connected": True})
         saved = json.loads(self.vault.read_text())
-        self.assertEqual(set(saved), {"version", "iv", "tag", "encrypted"})
+        self.assertEqual(set(saved), {"version", "cipher", "wrappedKey", "ciphertext"})
+        self.assertEqual(saved["version"], 2)
+        self.assertEqual(saved["cipher"], "dcrypt-fernet")
         self.assertEqual(await c.status(), {"provider": "google", "configured": True, "connected": True,
                                           "scopes": SCOPES, "redirectUri": "http://127.0.0.1/callback"})
         with self.assertRaisesRegex(ValueError, "Invalid or expired OAuth state"):

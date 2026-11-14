@@ -219,6 +219,23 @@ class LocalStore:
     def get_task(self,id):
         r=self.db.execute('SELECT * FROM tasks WHERE id=?',(id,)).fetchone(); return self._task(r) if r else None
     def list_tasks(self,limit=100): return [self._task(r) for r in self._rows('SELECT * FROM tasks ORDER BY created_at DESC,rowid DESC LIMIT ?',max(1,min(1000,limit)))]
+    def iter_queued_tasks(self):
+        """Oldest-first scheduler candidates, independent of retained history size.
+
+        Keyset batches keep memory bounded without skipping rows when admitted
+        tasks leave the queued set between batches. Fetch each batch completely
+        so no database cursor remains open while the scheduler awaits a run.
+        """
+        after = None
+        while True:
+            if after is None:
+                rows = self._rows("SELECT rowid AS queue_rowid,* FROM tasks WHERE status='queued' ORDER BY created_at,rowid LIMIT 100")
+            else:
+                rows = self._rows("SELECT rowid AS queue_rowid,* FROM tasks WHERE status='queued' AND (created_at,rowid)>(?,?) ORDER BY created_at,rowid LIMIT 100", *after)
+            if not rows: return
+            for row in rows:
+                after = (row['created_at'], row['queue_rowid'])
+                yield self._task(row)
     def update_task(self,id,patch):
         def work():
             t=self.get_task(id)
