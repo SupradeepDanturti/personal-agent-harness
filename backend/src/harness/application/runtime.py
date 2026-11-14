@@ -15,6 +15,7 @@ from harness.agents.runner import run_assistant
 from harness.integrations.browser import BrowserService
 from harness.core.config import Config
 from harness.integrations.google import GoogleConnector
+from harness.integrations.google_sheets import GoogleSheets
 from harness.knowledge.memory import build_context, sync_memory_files
 from harness.scheduling.proactivity import select_update
 from harness.scheduling.cron import next_cron_time, next_interval_time
@@ -29,8 +30,8 @@ from harness.knowledge.freshness import FreshnessVerifier
 from harness.core.utils import now_ms, text, dump, safe_error
 
 
-WRITES = {'browser.click', 'browser.fill', 'gmail.send', 'calendar.create', 'workspace.execute', 'skill.save', 'slack.send', 'mastodon.publish'}
-READ_ONLY = {'browser_read', 'memory_search', 'history_search', 'people_search', 'provider_read', 'skills', 'gmail_read', 'calendar_read'}
+WRITES = {'browser.click', 'browser.fill', 'gmail.send', 'calendar.create', 'sheets.update', 'workspace.execute', 'skill.save', 'slack.send', 'mastodon.publish'}
+READ_ONLY = {'browser_read', 'memory_search', 'history_search', 'people_search', 'provider_read', 'skills', 'gmail_read', 'calendar_read', 'sheets_read'}
 BLOCKING_APPROVALS = {'pending', 'approved', 'executing', 'uncertain'}
 
 
@@ -46,6 +47,7 @@ class Runtime:
         self.browser = browser or BrowserService(config.data_dir / 'browser-profile', executable_path=config.browser_executable, channel=config.browser_channel)
         self.google = google or GoogleConnector(config.google_client_id, config.google_client_secret,
             f'http://127.0.0.1:{config.port}/oauth/google/callback', config.data_dir / 'credentials' / 'google.enc', config.encryption_secret)
+        self.sheets = GoogleSheets(self.store, self.google)
         self.workspace = workspace or WorkspaceService(config.data_dir / 'workspace', docker_enabled=config.docker_enabled, docker_image=config.docker_image)
         self.history_index = HistoryIndex(self.store)
         self.people = PeopleGraph(self.store)
@@ -215,6 +217,12 @@ class Runtime:
         if operation == 'skills': return await self.workspace.read_skill(text(args.get('name'))) if action == 'read' else {'skills': await self.workspace.list_skills()}
         if operation == 'gmail_read': return await self.google.read_mail(text(args.get('id'))) if action == 'read' else await self.google.list_mail(text(args.get('query')), 10)
         if operation == 'calendar_read': return await self.google.list_events(text(args.get('start')), text(args.get('end')))
+        if operation == 'sheets_read':
+            if action == 'list': return await self.sheets.list()
+            if action == 'search': return await self.sheets.search(args.get('query', ''), args.get('pageToken'))
+            if action == 'tabs': return await self.sheets.tabs(text(args.get('id')), args.get('offset', 0))
+            if action == 'read': return await self.sheets.read(text(args.get('id')), args.get('range'))
+            raise ValueError('Unknown spreadsheet read action')
         if operation == 'propose_action': return await self.propose_action(text(args.get('kind')), args.get('payload'), text(args.get('summary')), task_id)
         if operation == 'delegate':
             if not task or task.get('parentId'): raise ValueError('Only a top-level background task can delegate')
@@ -227,6 +235,10 @@ class Runtime:
     async def propose_action(self, kind, payload, summary, task_id=None):
         if kind not in WRITES or not isinstance(payload, dict): raise ValueError('Unsupported action payload')
         if len(dump(payload)) > 16000: raise ValueError('Action is too large')
+        if kind in ('gmail.send', 'calendar.create'):
+            if kind == 'calendar.create': payload = {**payload, 'timeZone': payload.get('timeZone', 'America/Toronto')}
+            payload = await self.google.bind_write(kind, payload)
+        if kind == 'sheets.update': payload = await self.sheets.prepare_update(payload)
         if kind in ('slack.send', 'mastodon.publish'): payload = await self.providers.bind_write(kind, payload)
         if kind.startswith('browser.'):
             tab = next((t for t in await self.browser.tabs() if t['id'] == payload.get('tabId')), None)
@@ -255,8 +267,10 @@ class Runtime:
                 tab = next((t for t in await self.browser.tabs() if t['id'] == payload.get('tabId')), None)
                 if not tab or tab['url'] != payload.get('expectedUrl'): raise ValueError('Browser page changed; create a new approval')
                 result = await self.browser.click(payload['tabId'], payload['selector']) if kind == 'browser.click' else await self.browser.fill(payload['tabId'], payload['selector'], payload.get('value', ''))
-            elif kind == 'gmail.send': result = await self.google.send_mail(payload)
-            elif kind == 'calendar.create': result = await self.google.create_event({**payload, 'timeZone': payload.get('timeZone', 'America/Toronto')})
+            elif kind in ('gmail.send', 'calendar.create'): result = await self.google.execute_write(kind, payload)
+            elif kind == 'sheets.update':
+                await self.sheets.validate_update(payload)
+                result = await self.google.execute_write(kind, payload)
             elif kind in ('slack.send', 'mastodon.publish'): result = await self.providers.execute_write(kind, payload, claimed['id'])
             elif kind == 'workspace.execute':
                 if self.store.get_setting('memoryProjectionStale'): raise ValueError('Refresh stale managed memory files before script execution')

@@ -6,12 +6,16 @@ import { useResource } from "../../hooks/useResource";
 import { useAction } from "../../hooks/useAction";
 import { Card, Status, Feedback, Refresh } from "../../components/ui";
 import { ProviderConnections } from "../connections/ProviderConnections";
+import { GoogleSheets } from "./GoogleSheets";
+import { type View } from "../../app/navigation";
 
-export function Connections({ api, runtime }: { api: Api; runtime: Item }) {
+export function Connections({ api, runtime, navigate }: { api: Api; runtime: Item; navigate: (view: View) => void }) {
   const resource = useResource(api, "/connections");
   const action = useAction(resource.reload);
   const [authUrl, setAuthUrl] = useState("");
   const google = obj(resource.data.google);
+  const identity = obj(google.identity);
+  const capabilities = obj(google.capabilities);
   return (
     <>
       <Feedback
@@ -33,9 +37,9 @@ export function Connections({ api, runtime }: { api: Api; runtime: Item }) {
         }
       >
         <p className="section-description">
-          Gmail and Calendar use Google's authorization flow. Tokens stay on the
-          server, outside model context. Sending mail and creating calendar
-          events require exact action approval.
+          Gmail, Calendar and Sheets use Google's authorization flow. Tokens stay
+          on the server, outside model context. Sending mail, creating calendar
+          events and updating cells require exact action approval.
         </p>
         {!google.configured && (
           <div className="info-banner">
@@ -44,15 +48,28 @@ export function Connections({ api, runtime }: { api: Api; runtime: Item }) {
             account.
           </div>
         )}
+        {Boolean(google.connected) && <div className="info-banner">
+          <p>{identity.email ? `Connected account: ${txt(identity.email)}` : "Account identity is not verified. Reconnect Google before using account-bound actions."}</p>
+          {Boolean(google.reconnectRequired) && <p>Reconnect Google to verify the account and grant the missing access listed below.</p>}
+          <p>Available access: {[
+            capabilities.gmailRead && "Gmail reads", capabilities.gmailSend && "reviewed Gmail sends",
+            capabilities.calendarRead && "Calendar reads", capabilities.calendarWrite && "reviewed calendar changes",
+            capabilities.sheets && "registered Sheets", capabilities.driveDiscovery && "optional Drive discovery",
+          ].filter(Boolean).join(", ") || "None verified"}.</p>
+        </div>}
         {Array.isArray(google.scopes) && (
           <details>
             <summary>Granted access</summary>
             <pre>{google.scopes.map(txt).join("\n")}</pre>
+            {Array.isArray(google.missingScopes) && google.missingScopes.length > 0 && <>
+              <p>Missing access</p><pre>{google.missingScopes.map(txt).join("\n")}</pre>
+            </>}
+            {Boolean(google.connectionId) && <p>Connection reference: <code>{txt(google.connectionId)}</code></p>}
           </details>
         )}
         <div className="button-row">
           <Button
-            label="Connect Google"
+            label={google.connected ? "Reconnect Google" : "Connect Google"}
             variant="primary"
             isDisabled={action.busy || !google.configured}
             onClick={() =>
@@ -84,6 +101,8 @@ export function Connections({ api, runtime }: { api: Api; runtime: Item }) {
           </div>
         )}
       </Card>
+      {Boolean(google.connected && identity.id && capabilities.sheets) &&
+        <GoogleSheets key={txt(google.connectionId)} api={api} google={google} openApprovals={() => navigate("Approvals")} />}
       <ProviderConnections api={api} />
       <Card title="Runtime capabilities">
         <p className="section-description">

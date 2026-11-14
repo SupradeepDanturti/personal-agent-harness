@@ -55,7 +55,8 @@ the checkout root, independent of the launch directory, or from `HARNESS_ROOT`.
 | Durable transactions, revisions, action digest and recovery | `backend/src/harness/persistence/store.py` |
 | Model/tool feedback loop | `backend/src/harness/agents/runner.py` using OpenAI Agents SDK |
 | Dedicated Chromium lifecycle and public-network policy | `backend/src/harness/integrations/browser.py` |
-| Google OAuth and encrypted credential vault | `backend/src/harness/integrations/google.py` |
+| Google OAuth, verified grants and fixed Google API endpoints | `backend/src/harness/integrations/google.py` |
+| Account-bound spreadsheet registrations and bounded Sheets operations | `backend/src/harness/integrations/google_sheets.py` |
 | Confined artifacts and optional Docker execution | `backend/src/harness/workspace/files.py` |
 | Human-readable memory projections | `backend/src/harness/knowledge/memory.py` |
 | Timezone cron and missed-tick coalescing | `backend/src/harness/scheduling/cron.py` |
@@ -92,6 +93,19 @@ do not expose token values.
 memory files. Relative-path checks and symlink checks confine file operations.
 
 ## Execution and authorization
+
+Google grants now include a verified account identity, stored granted scopes and
+a fresh connection ID. Gmail, Calendar and Sheets action proposals bind that
+identity and connection ID; replacing the connection invalidates stale actions.
+OAuth/refresh/execution coordination prevents a connection replacement from
+silently changing the account used by an approved action. Old vaults lacking
+identity require fresh consent for identity-bound features and writes.
+
+Drive access is opt-in spreadsheet metadata discovery, not general file content.
+Account-bound Sheets registrations grant either a single bounded range or a
+spreadsheet whose individual operations still require bounded ranges. Discovery
+handles are short-lived and connection-bound. RAW cell updates use the existing
+approval/execution lifecycle. See `GOOGLE-WORKSPACE.md` for scopes and limits.
 
 The model proposes tools and consumes actual results. External writes pass
 through immutable approvals with an expiry and SHA-256 digest. An owner decision

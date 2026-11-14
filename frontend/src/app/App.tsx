@@ -216,7 +216,7 @@ export function App() {
                 {view === "Inbox" && <Inbox api={api} navigate={setView} />}
                 {view === "Files" && <Files api={api} />}
                 {view === "Connections" && (
-                  <Connections api={api} runtime={runtime} />
+                  <Connections api={api} runtime={runtime} navigate={setView} />
                 )}
                 {view === "Activity" && <Activity api={api} />}
               </>

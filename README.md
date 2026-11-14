@@ -152,7 +152,7 @@ vault and the assistant browser profile are preserved.
 | Background | Durable queue, bounded subtasks, restart recovery, one-shot/interval/timezone cron, stable event-hook IDs |
 | Delivery | Durable inbox, repeat suppression/source-observation gate for selective research schedules; desktop notices while Inbox is open |
 | Actions | Exact immutable payload/digest/expiry, accept/reject, one execution claim, uncertain-outcome reconciliation |
-| Connections | Google OAuth; encrypted grants for Slack, Mastodon, Shopify product reads and Home Assistant state reads; reviewed writes only where supported |
+| Connections | Google OAuth with verified account/grant binding, Gmail/Calendar, opt-in Drive spreadsheet discovery and bounded Sheets reads/reviewed RAW updates; encrypted grants for Slack, Mastodon, Shopify product reads and Home Assistant state reads |
 | Workspace | Confined text/Markdown/CSV/JSON/HTML artifacts and reviewed procedures; optional Docker-only scripts |
 
 There is no fallback to a different model. Model-based semantic ranking and
@@ -212,8 +212,8 @@ exposed. Browser writes require approvals bound to the observed page URL.
 
 ## Google setup
 
-Create a Google Cloud **web application** OAuth client, enable Gmail and
-Calendar APIs, configure the consent screen/test users, and register:
+Create a Google Cloud **web application** OAuth client, enable Gmail, Calendar,
+Drive and Sheets APIs as needed, configure the consent screen/test users, and register:
 
 ```
 http://127.0.0.1:8787/oauth/google/callback
@@ -225,8 +225,18 @@ The UI presents the Google authorization link. Only a real completed consent
 flow makes the connection active. Tokens are encrypted on disk and never
 returned to the model or status APIs.
 
-Requested scopes cover Gmail read/send and Calendar events. Sending email and
-creating events still require a separate exact action approval inside the app.
+Requested scopes cover verified OpenID/email identity, Gmail read/send, Calendar
+events, Sheets and Drive spreadsheet metadata discovery. Reconnect an existing
+Google grant to obtain the added scopes and verified account binding; requested
+permissions are not assumed granted. Sending email, creating events and updating
+cells still require a separate exact action approval inside the app. Pending
+actions are bound to the reviewed Google account and connection grant.
+
+Connections supports registering account-bound Sheets/ranges, opt-in discovery,
+tab metadata and bounded cell reads. Cell updates are reviewed and sent as RAW
+values; there is no general Drive file download or document-editing tool. See
+[Google Workspace setup and limits](docs/GOOGLE-WORKSPACE.md).
+
 Google consent does not activate other services. Additional Slack, Mastodon,
 Shopify and Home Assistant adapters need their own authorization in
 Connections. Instagram, Threads, WhatsApp and health integrations remain open.

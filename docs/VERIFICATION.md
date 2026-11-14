@@ -1,5 +1,34 @@
 # Verification ledger
 
+## Google Workspace expansion — November 13, 2026
+
+Adapted the reference `jarvis-parallax` account-bound Google structure to this
+Python harness: verified OIDC identity and grant binding for Gmail/Calendar/Sheets
+writes; opt-in Drive spreadsheet metadata search; account-bound registrations;
+bounded tabs/ranges and reviewed RAW cell updates. See `GOOGLE-WORKSPACE.md`.
+
+The local Windows Python 3.12 suite ran 118 tests: 117 passed and one Windows
+symlink test was skipped. TypeScript checks, production frontend build, Python
+compilation, locked install, source/wheel package build and tracked-private-file
+guard passed. The existing fifteen-screen Chromium/HTTP/SQLite/restart flow
+passed. A new real Chromium-to-local-API test passed registration, bounded read,
+pending approval, exactly one simulated RAW update, opt-in Drive discovery, tab
+selection, discovery disable and restart persistence. Both browser scenarios are
+included in the same existing frontend PR check.
+
+New tests cover old grant reconnection, scopes actually granted, failed identity
+verification, same-account-only refresh reuse, range and cell bounds, account
+isolation, registration limits, discovery expiry/revocation, pending-write
+invalidation after reconnect or unregister, RAW content/replay, refresh scope
+revocation, reconnect/write serialization, fixed endpoints, response caps,
+redirect rejection and read-only agent boundaries. A proposal route cannot
+override its path's registered spreadsheet handle.
+
+All Google responses and credentials were synthetic. No live account consent,
+Drive listing, spreadsheet read/write, email or calendar mutation was performed.
+The new connector scopes require local client setup and fresh consent before
+live acceptance can establish real account behavior.
+
 ## Repository restructuring — November 11, 2026
 
 The active frontend is now a standalone `frontend/` npm project with feature

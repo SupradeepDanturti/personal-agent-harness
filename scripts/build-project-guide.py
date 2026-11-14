@@ -14,7 +14,7 @@ modules = {
     'memory': ('Readable memory', 'Managed curated memory, daily notes and person notes projected from SQLite.'),
     'scheduling': ('Scheduling', 'One-shot, interval and timezone cron; missed-tick coalescing.'),
     'proactivity': ('Delivery policy', 'Repeat suppression and source-observation gates for selective updates.'),
-    'connectors': ('Google services', 'OAuth PKCE, encrypted refresh tokens, Gmail and Calendar; real consent still required.'),
+    'connectors': ('Google Workspace', 'Verified account/grant binding, Gmail/Calendar, opt-in Drive spreadsheet discovery and bounded reviewed Sheets operations; real consent still required.'),
     'workspace': ('Files and execution', 'Confined artifacts and reviewed procedures; explicitly enabled Docker scripts.'),
     'config': ('Configuration', 'Local settings and model policy; secrets are excluded from status output.'),
     'knowledge': ('Knowledge services', 'All-history FTS indexing with Luna ranking, sourced people graph and durable repairs.'),
@@ -25,6 +25,7 @@ docs = {name: (ROOT / file).read_text(encoding='utf-8') for name, file in {
     'Read me': 'README.md', 'Architecture': 'docs/ARCHITECTURE.md',
     'Roadmap': 'docs/PLAN.md', 'Verification': 'docs/VERIFICATION.md',
     'Knowledge & providers': 'docs/KNOWLEDGE-AND-PROVIDERS.md',
+    'Google Workspace': 'docs/GOOGLE-WORKSPACE.md',
 }.items()}
 runtime = (ROOT / 'backend/src/harness/api/routes.py').read_text(encoding='utf-8')
 routes = sorted(set(re.findall(r"route == '([^']+)'", runtime)))

@@ -34,12 +34,12 @@ def runtime_factory(config, store):
 
 
 @contextmanager
-def serve(config):
+def serve(config, runtime_factory_override=None):
     listener = socket.socket()
     listener.bind(("127.0.0.1", config.port))
     config.port = listener.getsockname()[1]
     server = uvicorn.Server(uvicorn.Config(
-        create_app(config, runtime_factory), log_level="error", access_log=False,
+        create_app(config, runtime_factory_override or runtime_factory), log_level="error", access_log=False,
     ))
     thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     thread.start()

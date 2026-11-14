@@ -4,6 +4,10 @@ New screens: History, People, Repairs, Evidence. Connections now includes Slack,
 Mastodon, Shopify Storefront and Home Assistant. All model calls remain
 GPT-6 Luna. Adapters are not connected accounts until authorization succeeds.
 
+The separate [Google Workspace connector](GOOGLE-WORKSPACE.md) adds verified
+account/grant binding, opt-in Drive spreadsheet discovery, registered Sheets
+and bounded reads/reviewed RAW updates while preserving Gmail and Calendar.
+
 ## History
 
 SQLite FTS5 indexes every retained local message, including history older than
