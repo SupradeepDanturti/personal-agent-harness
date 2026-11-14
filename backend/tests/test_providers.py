@@ -1,8 +1,7 @@
 import json
 import tempfile
-import time
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs
 from unittest.mock import AsyncMock
 
 import httpx
@@ -19,7 +18,7 @@ class ProviderTests(OfflineAsyncCase):
         self.temp=tempfile.TemporaryDirectory(prefix='python-runtime-providers-',dir=Path.cwd())
         self.root=Path(self.temp.name); self.requests=[]
         self.config=Config(root=self.root,data_dir=self.root,token='synthetic-harness-token-123456',encryption_secret='synthetic-credential-secret-123456',
-            spotify_client_id='test-client',mastodon_base_url='https://social.example.org',shopify_store='test-store.myshopify.com',homeassistant_base_url='http://192.168.1.20:8123')
+            mastodon_base_url='https://social.example.org',shopify_store='test-store.myshopify.com',homeassistant_base_url='http://192.168.1.20:8123')
         def handler(request):
             self.requests.append(request)
             path=request.url.path
@@ -30,10 +29,6 @@ class ProviderTests(OfflineAsyncCase):
             if path=='/api/v1/accounts/verify_credentials': return httpx.Response(200,json=dict(id='42',acct='test'))
             if path=='/api/v1/timelines/home': return httpx.Response(200,json=[dict(id='1',content='<b>Untrusted text</b>',url='https://social.example.org/@test/1')])
             if path=='/api/v1/statuses': return httpx.Response(200,json=dict(id='2',url='https://social.example.org/@test/2',visibility='private'))
-            if path=='/api/token': return httpx.Response(200,json=dict(access_token='synthetic-spotify-access',refresh_token='synthetic-spotify-refresh',expires_in=3600,scope='user-read-private'))
-            if path=='/v1/me': return httpx.Response(200,json=dict(id='spotify-user',display_name='Test'))
-            if path=='/v1/me/player/currently-playing': return httpx.Response(204)
-            if path=='/v1/me/tracks': return httpx.Response(200,json=dict(items=[]))
             if path=='/api/': return httpx.Response(200,json=dict(message='API running.'))
             if path=='/api/states/sensor.room_temperature': return httpx.Response(200,json=dict(entity_id='sensor.room_temperature',state='22',attributes={'secret':'not exposed'}))
             if path=='/api/2026-10/graphql.json':
@@ -93,16 +88,14 @@ class ProviderTests(OfflineAsyncCase):
         self.assertEqual(self.requests[-1].headers['Idempotency-Key'],'exact-approval-id')
         self.config.mastodon_base_url='https://other.example.org'
         with self.assertRaisesRegex(ValueError,'origin changed'):await self.registry.read('mastodon','home',{})
-    async def test_spotify_pkce_state_single_use_refresh_and_empty_playback(self):
-        start=self.registry.start_spotify();params=parse_qs(urlsplit(start['url']).query)
-        self.assertEqual(params['code_challenge_method'],['S256'])
-        self.assertEqual(params['redirect_uri'],['http://127.0.0.1:8787/oauth/spotify/callback'])
-        state=params['state'][0]
-        await self.registry.complete_spotify('synthetic-code',state)
-        with self.assertRaisesRegex(ValueError,'state'):await self.registry.complete_spotify('synthetic-code',state)
-        record=self.registry.vault.load('spotify');record['expiresAt']=time.time()-1;self.registry.vault.save('spotify',record)
-        self.assertEqual(await self.registry.read('spotify','currently_playing',{}),{})
-        self.assertTrue(any(b'grant_type=refresh_token' in r.content for r in self.requests))
+    async def test_removed_provider_is_not_listed_and_cannot_be_used(self):
+        providers=await self.registry.status()
+        self.assertEqual({p['provider'] for p in providers},{'slack','mastodon','shopify','homeassistant'})
+        with self.assertRaisesRegex(ValueError,'Unknown provider'):
+            await self.registry.connect_token('spotify',TOKEN)
+        with self.assertRaisesRegex(ValueError,'Unsupported provider read'):
+            await self.registry.read('spotify','currently_playing',{})
+        self.assertEqual(self.requests,[])
     async def test_device_reads_are_exact_and_omit_attributes(self):
         await self.registry.connect_token('homeassistant',TOKEN)
         result=await self.registry.read('homeassistant','states',dict(entityId='sensor.room_temperature'))

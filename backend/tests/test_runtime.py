@@ -64,6 +64,37 @@ class RuntimeTests(OfflineAsyncCase):
         self.assertEqual(len(self.runtime.store.list_notifications()), 1)
         self.assertEqual(self.runtime.store.list_schedules()[0]['status'], 'completed')
 
+    async def test_old_queued_task_runs_after_more_than_500_completed_records(self):
+        old = self.runtime.store.create_task({'prompt': 'Old work must not disappear'})
+        for index in range(501):
+            newer = self.runtime.store.create_task({'prompt': f'Completed history {index}'})
+            self.runtime.store.update_task(newer['id'], {'status': 'running'})
+            self.runtime.store.update_task(newer['id'], {'status': 'completed', 'result': 'Done'})
+        self.assertNotIn(old['id'], {t['id'] for t in self.runtime.store.list_tasks(500)})
+        await self.pump(2)
+        self.assertEqual(self.runtime.store.get_task(old['id'])['status'], 'completed')
+        self.assertEqual(self.runtime.store.get_task(old['id'])['attempts'], 1)
+        receipts = [n for n in self.runtime.store.list_notifications() if n['taskId'] == old['id']]
+        self.assertEqual(len(receipts), 1)
+
+    async def test_queued_admission_is_oldest_first_and_keeps_two_task_capacity(self):
+        calls = []; gate = asyncio.Future()
+        async def runner(config, prompt, context, caps):
+            calls.append(prompt)
+            await gate
+            caps.on_usage(5, 5)
+            return 'Done'
+        self.runtime.runner = runner
+        tasks = [self.runtime.store.create_task({'prompt': f'Queued task {index}'}) for index in range(3)]
+        await self.pump(1)
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(calls[0].startswith('Queued task 0'))
+        self.assertTrue(calls[1].startswith('Queued task 1'))
+        self.assertEqual(self.runtime.store.get_task(tasks[2]['id'])['status'], 'queued')
+        gate.set_result(None)
+        await self.pump(3)
+        self.assertTrue(all(self.runtime.store.get_task(t['id'])['status'] == 'completed' for t in tasks))
+
     async def test_approval_digest_rejection_and_exactly_once_execution(self):
         async def proposal(selector):
             status, approval = await self.request('/actions', {'kind': 'browser.click', 'payload': {'tabId': 'tab', 'selector': selector}, 'summary': 'Synthetic public click'})

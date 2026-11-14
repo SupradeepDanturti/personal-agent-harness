@@ -18,9 +18,6 @@ async def dispatch(runtime, method, path, body=None, query=None):
         if path == '/oauth/google/callback':
             await runtime.google.complete_auth(query.get('code', ''), query.get('state', ''))
             return Response('Google connected. Return to the assistant Connections tab.', media_type='text/plain')
-        if path == '/oauth/spotify/callback':
-            await runtime.providers.complete_spotify(query.get('code',''),query.get('state',''))
-            return Response('Spotify connected. Return to Connections and refresh.',media_type='text/plain')
         if method == 'GET':
             if route == '/history/index': return JSONResponse(runtime.history_index.status())
             if route == '/people': return JSONResponse(runtime.people.list(query.get('query','')))
@@ -59,10 +56,9 @@ async def dispatch(runtime, method, path, body=None, query=None):
             if route == '/people/relationships': return JSONResponse(runtime.people.relate(body),201)
             if route == '/repairs': return JSONResponse(runtime.repairs.create(text(body.get('kind'),'other'),text(body.get('subject')),text(body.get('description'))),201)
             if route == '/freshness/verify': return JSONResponse(await runtime.freshness.verify(text(body.get('text')),max_age_seconds=body.get('maxAgeSeconds',600)))
-            if route == '/connections/spotify/start': return JSONResponse(runtime.providers.start_spotify())
             if re.fullmatch(r'/connections/(slack|mastodon|shopify|homeassistant)/authorize',route):
                 return JSONResponse(await runtime.providers.connect_token(id_,body.get('token')))
-            if re.fullmatch(r'/connections/(slack|mastodon|spotify|shopify|homeassistant)/read',route):
+            if re.fullmatch(r'/connections/(slack|mastodon|shopify|homeassistant)/read',route):
                 return JSONResponse({'result':await runtime.providers.read(id_,text(body.get('action')),body)})
             if route == '/workflows': return JSONResponse(runtime.create_workflow(body), 202)
             if re.fullmatch(r'/workflows/[^/]+/cancel', route):
@@ -154,7 +150,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
             if re.fullmatch(r'/people/[^/]+',route): runtime.people.remove(id_); return JSONResponse({'deleted':True})
             if re.fullmatch(r'/people/relationships/[^/]+',route):
                 runtime.store.db.execute('DELETE FROM people_edges WHERE id=?',(parts[3],)); return JSONResponse({'deleted':True})
-            if re.fullmatch(r'/connections/(slack|mastodon|spotify|shopify|homeassistant)',route): return JSONResponse(await runtime.providers.disconnect(id_))
+            if re.fullmatch(r'/connections/(slack|mastodon|shopify|homeassistant)',route): return JSONResponse(await runtime.providers.disconnect(id_))
             if re.fullmatch(r'/memories/[^/]+', route): return JSONResponse(await runtime.forget(id_))
             if re.fullmatch(r'/schedules/[^/]+', route):
                 runtime.store.delete_schedule(id_)

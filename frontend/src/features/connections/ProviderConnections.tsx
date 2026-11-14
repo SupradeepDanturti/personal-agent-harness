@@ -36,7 +36,6 @@ function ProviderCard({
   const [secret, setSecret] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [auth, setAuth] = useState("");
   const [action, setAction] = useState(text((p.reads as string[])[0]));
   const [argument, setArgument] = useState("");
   const [result, setResult] = useState<Item | null>(null);
@@ -71,56 +70,32 @@ function ProviderCard({
       <ErrorNotice value={error} />
       {notice && <p role="status">{notice}</p>}
       <div className="stack-form">
-        {id === "spotify" ? (
-          <>
-            <Button
-              label="Authorize Spotify"
-              variant="primary"
-              isDisabled={busy || !p.configured}
-              onClick={() =>
-                void run(async () =>
-                  setAuth(
-                    text((await api("/connections/spotify/start", {})).url),
-                  ),
-                )
-              }
-            />
-            {auth && (
-              <a href={auth} target="_blank" rel="noopener noreferrer">
-                Continue to Spotify consent, then return and refresh
-              </a>
-            )}
-          </>
-        ) : (
-          <>
-            <label className="native-field">
-              Authorized provider token (never paste into chat)
-              <input
-                type="password"
-                autoComplete="off"
-                value={secret}
-                maxLength={4096}
-                onChange={(e) => setSecret(e.target.value)}
-              />
-            </label>
-            <Button
-              label="Verify account and save encrypted token"
-              variant="primary"
-              isDisabled={busy || !p.configured || !secret.trim()}
-              onClick={() =>
-                void run(async () => {
-                  await api(`/connections/${id}/authorize`, {
-                    token: secret.trim(),
-                  });
-                  setSecret("");
-                  setNotice(
-                    "Authorization verified and saved. Tokens are not returned to the model.",
-                  );
-                })
-              }
-            />
-          </>
-        )}
+        <label className="native-field">
+          Authorized provider token (never paste into chat)
+          <input
+            type="password"
+            autoComplete="off"
+            value={secret}
+            maxLength={4096}
+            onChange={(e) => setSecret(e.target.value)}
+          />
+        </label>
+        <Button
+          label="Verify account and save encrypted token"
+          variant="primary"
+          isDisabled={busy || !p.configured || !secret.trim()}
+          onClick={() =>
+            void run(async () => {
+              await api(`/connections/${id}/authorize`, {
+                token: secret.trim(),
+              });
+              setSecret("");
+              setNotice(
+                "Authorization verified and saved. Tokens are not returned to the model.",
+              );
+            })
+          }
+        />
         <div className="button-row">
           <Button
             label="Refresh connection"
@@ -135,7 +110,6 @@ function ProviderCard({
             onClick={() =>
               void run(async () => {
                 await api(`/connections/${id}`, undefined, "DELETE");
-                setAuth("");
                 setResult(null);
               })
             }

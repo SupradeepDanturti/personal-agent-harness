@@ -79,8 +79,15 @@ user's everyday browser data. Cookies persist; tab identities can change when
 headless/manual modes restart the browser. Manual control blocks agent browser
 operations. Password input is left to the user in the dedicated window.
 
-`.assistant/credentials` is outside the tool workspace. Google tokens use an
-AES-GCM encrypted envelope. Status/model/tool APIs do not expose token values.
+`.assistant/credentials` is outside the tool workspace. New Google/provider
+tokens use version-2 `dcrypt.TextCrypt` envelopes with JSON payloads, not pickle.
+The dcrypt RSA key bundle uses 2048-bit keys and is itself Fernet-encrypted with
+the existing credential secret. Both encrypted layers bind the intended store
+context; no unencrypted private-key bundle is written to disk. Legacy Google
+version-1 and provider AES-GCM envelopes remain readable and migrate only on a
+successful save. The older application cannot read version-2 files; a rollback
+requires restoring the matching pre-upgrade state backup. Status/model/tool APIs
+do not expose token values.
 `.assistant/workspace` contains artifacts, reviewed procedures, and managed
 memory files. Relative-path checks and symlink checks confine file operations.
 
@@ -95,6 +102,9 @@ Task and schedule state persist separately from SDK inference state. Queue
 recovery requeues bounded interrupted runs and holds uncertain writes for review.
 Schedule dispatch atomically enqueues its stable occurrence ID and advances the
 schedule. Background work continues only while the local server is running.
+The scheduler selects queued work oldest-first in keyset-paginated batches,
+independently of the bounded recent-task lists used by the UI and history APIs.
+Completed history therefore cannot hide older queued tasks.
 
 Subtasks are bounded and read-only; child results are handed back explicitly.
 Managed goal-step completion needs a reference to a source or artifact observed

@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 import time
+from unittest.mock import patch
 from pathlib import Path
 
 from harness.persistence.store import LocalStore, canonical_json
@@ -51,6 +52,17 @@ class StoreTests(unittest.TestCase):
         recovered = self.store.recover_interrupted()
         self.assertEqual(recovered['requeued'], 1)
         self.assertEqual(self.store.get_task(task['id'])['status'], 'queued')
+
+    def test_queued_iterator_spans_batches_while_tasks_leave_the_queue(self):
+        with patch('harness.persistence.store._now', return_value=1000):
+            tasks = [self.store.create_task({'prompt': f'Queued {index}'}) for index in range(205)]
+        seen = []
+        for task in self.store.iter_queued_tasks():
+            seen.append(task['id'])
+            self.store.update_task(task['id'], {'status': 'running'})
+            self.store.update_task(task['id'], {'status': 'completed', 'result': 'Done'})
+        self.assertEqual(seen, [task['id'] for task in tasks])
+        self.assertEqual(list(self.store.iter_queued_tasks()), [])
 
     def test_memory_revision_lineage_and_explicit_protection(self):
         m = self.store.save_memory({'text':'Prefers tea','source':'message:m1','provenance':'explicit'})

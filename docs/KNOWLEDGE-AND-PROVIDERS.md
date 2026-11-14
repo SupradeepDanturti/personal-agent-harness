@@ -1,7 +1,7 @@
 # Knowledge and providers
 
 New screens: History, People, Repairs, Evidence. Connections now includes Slack,
-Mastodon, Spotify, Shopify Storefront and Home Assistant. All model calls remain
+Mastodon, Shopify Storefront and Home Assistant. All model calls remain
 GPT-6 Luna. Adapters are not connected accounts until authorization succeeds.
 
 ## History
@@ -69,12 +69,13 @@ existing controls, then record evidence.
 | --- | --- | --- | --- |
 | Slack | Up to 15 channels/messages; exact conversation ID | Plain-text message to exact conversation | Installed app/account token; membership/scopes apply |
 | Mastodon | Up to 15 home-timeline posts | Post with explicit visibility | Authorized token for configured HTTPS instance |
-| Spotify | Current item and up to 15 saved tracks | None | PKCE OAuth, one-use expiring state, serialized refresh |
 | Shopify Storefront | Up to 10 products, observed price/currency | None; no carts, payments or checkout | Storefront public token for configured shop |
 | Home Assistant | One exact entity's state; attributes excluded | None; no device/lock/alarm control | Long-lived token for configured trusted installation |
 
-Enter tokens only in Connections; Spotify uses its consent page. Identity checks
-precede provider-bound AES-GCM storage outside model workspace/context. Status
+Enter tokens only in Connections. Identity checks
+precede provider-bound dcrypt text-envelope storage outside model workspace/context.
+The key bundle is encrypted under the existing credential secret, and legacy
+AES-GCM grants remain readable until their next successful save migrates them. Status
 reports stored identity/last verification, not a live permission check or proof
 that every operation's scope works. Origins cannot be overridden in agent tools.
 Home Assistant allows your explicitly configured trusted LAN origin, not generic
@@ -114,14 +115,12 @@ provider access remain separate live gates.
 Configure only desired providers in `.dev.vars` and restart:
 
 ```dotenv
-SPOTIFY_CLIENT_ID=
 MASTODON_BASE_URL=https://your-instance.example
 SHOPIFY_STORE=your-store.myshopify.com
 HOME_ASSISTANT_BASE_URL=http://your-trusted-installation:8123
 ```
 
-Register Spotify callback `http://127.0.0.1:8787/oauth/spotify/callback`, adjusting
-the port. App/account eligibility and development-mode rules apply. Slack needs
+Slack needs
 `channels:read`, `channels:history`, and `chat:write` for sends; other conversation
 types need corresponding scopes/membership. Mastodon needs authorized account
 and status reads, plus status writes if desired. Shopify uses a Storefront public
@@ -137,20 +136,16 @@ token, not an Admin API token. Home Assistant uses a long-lived account token.
 - `GET /api/freshness`; `POST /api/freshness/verify` with `{text,maxAgeSeconds?}`.
 - `GET /api/connections` includes provider catalogue/status.
 - `POST /api/connections/:provider/authorize` with `{token}` for manual tokens.
-- `POST /api/connections/spotify/start`; state-validated public OAuth callback.
 - `POST /api/connections/:provider/read` with supported action/arguments.
 - `DELETE /api/connections/:provider` removes local authorization.
 - Existing action API adds `slack.send` and `mastodon.publish`.
 
 Read-only workflow agents may call `history_search`, `people_search` and
 `provider_read`; they cannot authorize accounts or propose sends. API bearer
-authentication is unchanged. Spotify callback checks one-use OAuth state.
+authentication is unchanged.
 
 ## Primary references consulted
 
-- https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow
-- https://developer.spotify.com/documentation/web-api/concepts/redirect_uri
-- https://developer.spotify.com/documentation/web-api/concepts/scopes
 - https://docs.slack.dev/reference/methods/auth.test/
 - https://docs.slack.dev/reference/methods/conversations.history/
 - https://docs.slack.dev/reference/methods/chat.postmessage/

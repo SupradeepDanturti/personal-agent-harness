@@ -75,7 +75,7 @@ background work. A sleeping/offline laptop is not an always-on cloud service.
 
 ## External prerequisites and deferred capability
 
-Gmail/Calendar need the user's own Google OAuth client and consent. Spotify,
+Gmail/Calendar need the user's own Google OAuth client and consent.
 Threads, Instagram, health and device integrations each need supported APIs,
 eligible accounts and separate authorization. Interface code does not mean an
 account is connected. Image/video/audio generation needs provider-specific
@@ -130,6 +130,6 @@ open before hosted deployment; no OAuth or account-write success is claimed.
 
 Implemented locally: full retained-history retrieval, sourced people/group graph,
 per-source freshness and bounded claim support review, durable repair threads,
-and Slack/Mastodon/Spotify/Shopify/Home Assistant adapters. See
+and Slack/Mastodon/Shopify/Home Assistant adapters. See
 `KNOWLEDGE-AND-PROVIDERS.md` for limits, setup and APIs. New live acceptance and
 provider consent remain pending; baseline live checks do not establish them.
