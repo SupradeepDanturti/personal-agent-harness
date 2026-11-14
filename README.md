@@ -22,8 +22,12 @@ No VM is provisioned. Cloudflare deployment is deferred.
 Use **History** to find retained conversations, saved memories, specialist task
 results, workflow plans and completed actions together. Keyword search is local;
 open an original source before reusing its result. The agent has the same bounded
-search/read tools and a 12,000-character reference context budget. External chat
-imports and MCP connections are planned in [the product roadmap](docs/PLAN.md).
+search/read tools and a 12,000-character reference context budget. Connect owner-approved tools through [MCP connections](docs/MCP.md). External
+chat imports remain in [the product roadmap](docs/PLAN.md).
+
+For repeatable local containers, follow [Docker development and acceptance](docs/DOCKER.md).
+The runtime image keeps application state in a named volume and includes the built UI
+and dedicated Chromium. The separate acceptance image uses synthetic services.
 
 ## Pull request checks
 

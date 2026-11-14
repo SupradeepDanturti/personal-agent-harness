@@ -1,0 +1,52 @@
+services:
+  app:
+    image: personal-agent-harness:local
+    platform: linux/amd64
+    build:
+      context: .
+      target: runtime
+    init: true
+    env_file:
+      - path: .docker.env
+        required: false
+    environment:
+      CONTAINER_MODE: "true"
+      LOCAL_PORT: "8787"
+      ENABLE_DOCKER_EXECUTION: "false"
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - assistant-state:/data/.assistant
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=268435456
+    shm_size: 256mb
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 512
+    mem_limit: 2g
+    cpus: 2
+    restart: unless-stopped
+
+  acceptance:
+    profiles: [test]
+    image: personal-agent-harness:acceptance
+    platform: linux/amd64
+    build:
+      context: .
+      target: acceptance
+    init: true
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=268435456
+      - /test-work:rw,nosuid,uid=10001,gid=10001,size=268435456
+    shm_size: 256mb
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 512
+    mem_limit: 2g
+    cpus: 2
+
+volumes:
+  assistant-state:

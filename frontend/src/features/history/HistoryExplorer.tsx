@@ -7,7 +7,7 @@ import { ErrorNotice } from "../../components/ErrorNotice";
 
 const kindLabel = (kind: unknown) => {
   const name = text(kind);
-  return ({ message: "Conversation", task: "Task / specialist", workflow: "Workflow", memory: "Saved memory", action: "Completed action" } as Record<string, string>)[name] || name;
+  return ({ message: "Conversation", task: "Task / specialist", workflow: "Workflow", memory: "Saved memory", action: "Completed action", tool: "MCP tool result" } as Record<string, string>)[name] || name;
 };
 
 export function HistoryExplorer({ api }: { api: Api }) {

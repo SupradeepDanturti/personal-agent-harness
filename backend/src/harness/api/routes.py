@@ -19,6 +19,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
             await runtime.google.complete_auth(query.get('code', ''), query.get('state', ''))
             return Response('Google connected. Return to the assistant Connections tab.', media_type='text/plain')
         if method == 'GET':
+            if route == '/mcp': return JSONResponse({'connections': await runtime.mcp.status()})
             if route == '/recall/item': return JSONResponse(runtime.recall.read(query.get('kind'), query.get('id')))
             if route == '/history/index': return JSONResponse(runtime.history_index.status())
             if route == '/people': return JSONResponse(runtime.people.list(query.get('query','')))
@@ -53,6 +54,12 @@ async def dispatch(runtime, method, path, body=None, query=None):
                 return JSONResponse(file)
             if route == '/settings': return JSONResponse({'timezone': runtime.store.get_setting('timezone') or 'America/Toronto', 'nightlyDreamEnabled': runtime.store.get_setting('nightlyDreamEnabled') is not False})
         if method == 'POST':
+            if route == '/mcp': return JSONResponse(await runtime.mcp.save(body), 201)
+            mcp_match = re.fullmatch(r'/mcp/([^/]+)/(test|grants)', route)
+            if mcp_match:
+                if mcp_match[2] == 'test': return JSONResponse(await runtime.mcp.discover(mcp_match[1]))
+                return JSONResponse(await runtime.mcp.grant(mcp_match[1], body))
+
             if route == '/recall/search': return JSONResponse(runtime.recall.search(body.get('query')))
             if route == '/google/sheets': return JSONResponse(await runtime.sheets.register(body), 201)
             if route == '/google/sheets/search': return JSONResponse(await runtime.sheets.search(body.get('query', ''), body.get('pageToken')))
@@ -160,6 +167,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
                     if not body['nightlyDreamEnabled']: runtime.store.delete_schedule('nightly-dream')
                 return JSONResponse({'ok': True})
         if method == 'DELETE':
+            if re.fullmatch(r'/mcp/[^/]+', route): return JSONResponse(await runtime.mcp.remove(id_))
             sheet_match = re.fullmatch(r'/google/sheets/([^/]+)', route)
             if sheet_match: return JSONResponse(await runtime.sheets.remove(sheet_match[1]))
             if re.fullmatch(r'/people/[^/]+',route): runtime.people.remove(id_); return JSONResponse({'deleted':True})

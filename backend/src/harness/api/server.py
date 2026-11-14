@@ -1,4 +1,4 @@
-"""Loopback-only HTTP server for the local assistant harness."""
+"""Local HTTP server with an explicit, strict container network mode."""
 from __future__ import annotations
 
 import hmac
@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from harness.core.config import Config, load_config
+from harness.core.config import Config, load_config, container_hosts
 
 MAX_REQUEST_BYTES = 64 * 1024
 PUBLIC_PATHS = frozenset(("/health", "/oauth/google/callback"))
@@ -21,9 +21,10 @@ PUBLIC_PATHS = frozenset(("/health", "/oauth/google/callback"))
 class RequestGuards:
     """Validate loopback Host, cap streamed bodies, and add baseline headers."""
 
-    def __init__(self, app: ASGIApp, port: int):
+    def __init__(self, app: ASGIApp, port: int, allowed_hosts: tuple[str, ...] = ()):
         self.app = app
         self.allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+        self.allowed_hosts.update(container_hosts(','.join(allowed_hosts)))
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -156,7 +157,9 @@ def create_app(config: Config | None = None, runtime_factory: Callable | None = 
                 app.state.runtime = None
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-    app.add_middleware(RequestGuards, port=config.port)
+    if config.allowed_hosts and not config.container_mode:
+        raise ValueError('Additional allowed hosts require container mode')
+    app.add_middleware(RequestGuards, port=config.port, allowed_hosts=config.allowed_hosts)
 
     @app.get("/health")
     async def health():
@@ -205,8 +208,8 @@ def _authorized(request: Request, token: str) -> bool:
 def main() -> None:
     import uvicorn
     config = load_config()
-    uvicorn.run(create_app(config), host="127.0.0.1", port=config.port,
-                reload=False, workers=1, access_log=False)
+    uvicorn.run(create_app(config), host=config.listen_host, port=config.port,
+                reload=False, workers=1, access_log=False, proxy_headers=False)
 
 
 if __name__ == "__main__":

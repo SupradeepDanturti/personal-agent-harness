@@ -329,3 +329,29 @@ locks; it never accesses a real account.
 MCP connections, importing external chat histories, full session management,
 containerized app acceptance and Cloudflare hosting remain future gates in
 PLAN.md. This release searches only the harness's own retained records.
+
+
+## MCP and container development - November 13, 2026
+
+Backend regression: 153 tests run, 152 passed, one Windows symlink skip. Thirteen
+MCP service/protocol tests cover explicit grants, actual SDK/FastMCP Streamable
+HTTP, changed schemas, grant revocation/reconnect, write/removal serialization,
+public-address pinning and TLS host preservation, redirects, oversized/stalled
+SSE, compressed responses, credential-safe logs/results, structured results,
+local schema validation and unsupported regex/external references.
+
+Runtime regressions exercise the MCP catalog without endpoint/credential leaks,
+one-definition inspection, read-only specialist access, retained/forgettable
+result receipts and exact approval execution/replay protection. Failed SQLite
+initialization now closes its handle, with a separate regression; the historical
+Node migration fixture uses bounded retries for transient Windows file access.
+
+Frontend TypeScript/build and all three Chromium acceptance modules pass on the
+Windows host. MCP UI acceptance covers add/discover/no implicit access, explicit
+permissions, encrypted restart persistence, revoke/remove and mobile layout.
+Compilation, backend package build and tracked-private-file guard pass.
+
+The Docker runtime/acceptance images and CI smoke runner are implemented.
+Container build/run results must be checked separately; host Python/Chromium
+results are not proof of a container pass. No live MCP/Google account calls or
+paid model calls were made. Actual Cloudflare setup was deferred by the owner.

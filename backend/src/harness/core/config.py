@@ -27,10 +27,40 @@ class Config:
     mastodon_base_url: str = ''
     shopify_store: str = ''
     homeassistant_base_url: str = ''
+    container_mode: bool = False
+    allowed_hosts: tuple[str, ...] = ()
+    mcp_trusted_loopback_urls: tuple[str, ...] = ()
+
+    @property
+    def listen_host(self) -> str:
+        return '0.0.0.0' if self.container_mode else '127.0.0.1'
+
+
+def container_hosts(value: str) -> tuple[str, ...]:
+    """Explicit Host header authorities, never wildcard/proxy trust."""
+    result = []
+    for item in value.split(','):
+        host = item.strip().lower()
+        if not host: continue
+        match = re.fullmatch(r'(localhost|127\.0\.0\.1|[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?):([1-9][0-9]{0,4})', host)
+        if not match or int(match[2]) > 65535 or '..' in match[1]:
+            raise ValueError('HARNESS_ALLOWED_HOSTS must contain exact host:port values, without URLs or wildcards')
+        if host not in result: result.append(host)
+    if len(result) > 20: raise ValueError('At most 20 container hosts may be configured')
+    return tuple(result)
+
+
+def _default_root() -> Path:
+    source = Path(__file__).resolve()
+    # Locked non-editable installs live in the workspace's .venv in the image.
+    # An editable src-layout install continues to resolve to the checkout root.
+    for parent in source.parents:
+        if parent.name == '.venv': return parent.parent
+    return source.parents[4]
 
 
 def load_config(root: Path | str | None = None) -> Config:
-    root = Path(root or os.environ.get("HARNESS_ROOT") or Path(__file__).resolve().parents[4]).resolve()
+    root = Path(root or os.environ.get("HARNESS_ROOT") or _default_root()).resolve()
     values = {}
     path = root / '.dev.vars'
     if path.exists():
@@ -46,6 +76,12 @@ def load_config(root: Path | str | None = None) -> Config:
     port = int(get('LOCAL_PORT', '8787'))
     if not 1024 <= port <= 65535:
         raise ValueError('LOCAL_PORT must be between 1024 and 65535')
+    container_mode = get('CONTAINER_MODE', 'false').lower()
+    if container_mode not in ('true', 'false'):
+        raise ValueError('CONTAINER_MODE must be true or false')
+    allowed_hosts = container_hosts(get('HARNESS_ALLOWED_HOSTS'))
+    if allowed_hosts and container_mode != 'true':
+        raise ValueError('HARNESS_ALLOWED_HOSTS requires CONTAINER_MODE=true')
     return Config(serve_frontend=get('SERVE_FRONTEND', 'true').lower() == 'true',
                   frontend_dir=(root / get('FRONTEND_DIST_DIR', 'frontend/dist')).resolve(),
                   root=root, data_dir=(root / get('ASSISTANT_DATA_DIR', '.assistant')).resolve(), port=port,
@@ -56,4 +92,6 @@ def load_config(root: Path | str | None = None) -> Config:
                   docker_enabled=get('ENABLE_DOCKER_EXECUTION') == 'true', docker_image=get('DOCKER_IMAGE', 'python:3.12-slim'),
                   daily_token_limit=int(get('DAILY_TOKEN_LIMIT', '200000')), run_token_reservation=int(get('RUN_TOKEN_RESERVATION', '100000')),
                   mastodon_base_url=get('MASTODON_BASE_URL'),
-                  shopify_store=get('SHOPIFY_STORE'), homeassistant_base_url=get('HOME_ASSISTANT_BASE_URL'))
+                  shopify_store=get('SHOPIFY_STORE'), homeassistant_base_url=get('HOME_ASSISTANT_BASE_URL'),
+                  container_mode=container_mode == 'true', allowed_hosts=allowed_hosts,
+                  mcp_trusted_loopback_urls=tuple(value.strip() for value in get('MCP_TRUSTED_LOCAL_URLS').split(',') if value.strip()))

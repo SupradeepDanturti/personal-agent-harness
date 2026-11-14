@@ -302,7 +302,18 @@ store.close(); process.stdout.write(JSON.stringify({workflowId:workflow.id,memor
         # test host applies different access to Node-created SQLite files.
         restored = self.root / 'python-restored.sqlite'
         restored.write_bytes((self.root / 'assistant.sqlite').read_bytes())
-        self.runtime = Runtime(self.config, store=LocalStore(restored), browser=self.browser, google=self.google, runner=runner)
+        # Antivirus/fixture file inspection may briefly hold the newly copied
+        # file on Windows. Failed initialization closes its connection before
+        # this bounded retry; persistent permission errors still fail the test.
+        import sqlite3
+        for attempt in range(8):
+            try:
+                migrated = LocalStore(restored)
+                break
+            except sqlite3.OperationalError as error:
+                if attempt == 7 or not any(word in str(error).lower() for word in ('readonly', 'locked')): raise
+                await asyncio.sleep(0.05 * (attempt + 1))
+        self.runtime = Runtime(self.config, store=migrated, browser=self.browser, google=self.google, runner=runner)
         await self.pump()
         self.assertEqual(len(calls), 1)
         self.assertEqual(self.runtime.store.get_task(ids['workflowId'])['result'], 'Python resumed result')

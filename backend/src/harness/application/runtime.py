@@ -25,19 +25,20 @@ from harness.agents.workflows import research_workflow, workflow_task_id
 from harness.workspace.files import WorkspaceService
 from harness.knowledge.index import HistoryIndex, PeopleGraph, RepairQueue
 from harness.integrations.providers import ProviderRegistry
+from harness.integrations.mcp import MCPRegistry
 from harness.knowledge.freshness import FreshnessVerifier
 
 
 from harness.core.utils import now_ms, text, dump, safe_error
 
 
-WRITES = {'browser.click', 'browser.fill', 'gmail.send', 'calendar.create', 'sheets.update', 'workspace.execute', 'skill.save', 'slack.send', 'mastodon.publish'}
-READ_ONLY = {'browser_read', 'memory_search', 'history_search', 'recall_search', 'recall_read', 'people_search', 'provider_read', 'skills', 'gmail_read', 'calendar_read', 'sheets_read'}
+WRITES = {'browser.click', 'browser.fill', 'gmail.send', 'calendar.create', 'sheets.update', 'workspace.execute', 'skill.save', 'slack.send', 'mastodon.publish', 'mcp.call'}
+READ_ONLY = {'browser_read', 'memory_search', 'history_search', 'recall_search', 'recall_read', 'people_search', 'provider_read', 'skills', 'gmail_read', 'calendar_read', 'sheets_read', 'mcp_list', 'mcp_read'}
 BLOCKING_APPROVALS = {'pending', 'approved', 'executing', 'uncertain'}
 
 
 class Runtime:
-    def __init__(self, config: Config, store=None, runner=None, browser=None, google=None, workspace=None, providers=None):
+    def __init__(self, config: Config, store=None, runner=None, browser=None, google=None, workspace=None, providers=None, mcp=None):
         self.config = config
         if len(config.token) < 24: raise ValueError('HARNESS_TOKEN must have at least 24 characters')
         if config.model != 'gpt-6-luna': raise ValueError('Only gpt-6-luna is permitted')
@@ -55,6 +56,7 @@ class Runtime:
         self.people = PeopleGraph(self.store)
         self.repairs = RepairQueue(self.store)
         self.providers = providers or ProviderRegistry(config)
+        self.mcp = mcp or MCPRegistry(self.store, config.encryption_secret or config.token, trusted_loopback_urls=getattr(config, 'mcp_trusted_loopback_urls', ()))
         self.freshness = FreshnessVerifier(self)
         self.instance_id = str(uuid4())
         self.active = {}
@@ -93,6 +95,8 @@ class Runtime:
         close = getattr(self.google, 'close', None)
         if close: await close()
         await self.providers.close()
+        close_mcp = getattr(self.mcp, 'close', None)
+        if close_mcp: await close_mcp()
         self.store.close()
 
     async def project_memory(self):
@@ -188,6 +192,28 @@ class Runtime:
             result = await self.browser.navigate(text(args.get('url'))) if action == 'navigate' else await self.browser.snapshot(text(args.get('tabId')))
             self.store.append_event('source.observed', {'urls': [result['url']], 'observedAt': now_ms()}, task_id)
             return result
+        if operation == 'mcp_list':
+            connections = [c for c in await self.mcp.status() if c.get('connected')]
+            identifier = text(args.get('id'))
+            if identifier:
+                connection = next((c for c in connections if c['id'] == identifier), None)
+                if not connection: raise ValueError('MCP connection not found')
+                tools = [t for t in connection.get('tools', []) if t.get('access') in ('read', 'approval')
+                    and (not args.get('tool') or t['name'] == args['tool'])]
+                offset = args.get('offset', 0)
+                if type(offset) is not int or offset < 0 or offset > 200: raise ValueError('Invalid MCP tool offset')
+                return {'id': identifier, 'tools': tools[offset:offset+1],
+                    'nextOffset': offset+1 if offset+1 < len(tools) else None}
+            offset = args.get('offset', 0)
+            if type(offset) is not int or offset < 0 or offset > 10: raise ValueError('Invalid MCP catalogue offset')
+            return {'connections': [dict(id=c['id'], name=c['name'], tools=[
+                dict(name=t['name'], description=t.get('description', '')[:160], access=t['access'])
+                for t in c.get('tools', []) if t.get('access') in ('read', 'approval')]) for c in connections[offset:offset+1]],
+                'nextOffset': offset+1 if offset+1 < len(connections) else None}
+        if operation == 'mcp_read':
+            result = await self.mcp.call_read(text(args.get('id')), text(args.get('tool')), args.get('arguments', {}))
+            self.store.append_event('mcp.result', {'connectionId': text(args.get('id')), 'tool': text(args.get('tool')), 'result': result}, task_id)
+            return result
         if operation == 'memory_search': return {'memories': self.store.list_memories(text(args.get('query'))), 'revision': self.store.revision()}
         if operation == 'history_search': return await self.search_history(text(args.get('query')), args.get('semantic') is True)
         if operation == 'recall_search': return self.recall.search(text(args.get('query')))
@@ -245,6 +271,7 @@ class Runtime:
         if kind in ('gmail.send', 'calendar.create'):
             if kind == 'calendar.create': payload = {**payload, 'timeZone': payload.get('timeZone', 'America/Toronto')}
             payload = await self.google.bind_write(kind, payload)
+        if kind == 'mcp.call': payload = await self.mcp.bind_write(payload)
         if kind == 'sheets.update': payload = await self.sheets.prepare_update(payload)
         if kind in ('slack.send', 'mastodon.publish'): payload = await self.providers.bind_write(kind, payload)
         if kind.startswith('browser.'):
@@ -275,6 +302,7 @@ class Runtime:
                 if not tab or tab['url'] != payload.get('expectedUrl'): raise ValueError('Browser page changed; create a new approval')
                 result = await self.browser.click(payload['tabId'], payload['selector']) if kind == 'browser.click' else await self.browser.fill(payload['tabId'], payload['selector'], payload.get('value', ''))
             elif kind in ('gmail.send', 'calendar.create'): result = await self.google.execute_write(kind, payload)
+            elif kind == 'mcp.call': result = await self.mcp.execute_write(payload)
             elif kind == 'sheets.update':
                 await self.sheets.validate_update(payload)
                 result = await self.google.execute_write(kind, payload)

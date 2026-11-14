@@ -14,7 +14,7 @@ from harness.integrations.browser import (
 from harness.workspace.files import MAX_BYTES, WorkspaceService
 from tests.offline_loop import OfflineAsyncCase, RetryTemporaryDirectory
 
-_TEST_TEMP_ROOT = Path(__file__).resolve().parent
+_TEST_TEMP_ROOT = Path.cwd()
 
 
 class BrowserPolicyTests(OfflineAsyncCase):

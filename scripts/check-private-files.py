@@ -13,6 +13,8 @@ def is_private(filename):
             return True
         if part == ".env" or (part.startswith(".env.") and part != ".env.example"):
             return True
+        if part == ".docker.env" or (part.startswith(".docker.env.") and part != ".docker.env.example"):
+            return True
     return path.suffix in {".pem", ".key", ".sqlite", ".sqlite3"}
 
 

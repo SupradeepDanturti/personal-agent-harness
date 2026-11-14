@@ -85,6 +85,26 @@ class ServerTests(OfflineAsyncCase):
         self.assertEqual((await self.client.get("/health", headers={"Host": "127.0.0.1:8788"})).status_code, 400)
         self.assertEqual((await self.client.get("/health", headers={"Host": "localhost:8787"})).status_code, 200)
 
+    async def test_container_mode_accepts_only_explicit_hosts_and_not_forwarded_spoofs(self):
+        self.config.container_mode = True
+        self.config.allowed_hosts = ('harness:8787',)
+        app = create_app(self.config, FakeRuntime)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://harness:8787') as client:
+            self.assertEqual((await client.get('/health')).status_code, 200)
+            self.assertEqual((await client.get('/health', headers={'Host': 'harness:8788'})).status_code, 400)
+            self.assertEqual((await client.get('/health', headers={'Host': 'evil.example:8787',
+                'X-Forwarded-Host': 'harness:8787', 'X-Forwarded-Proto': 'https'})).status_code, 400)
+
+    async def test_main_uses_container_bind_and_does_not_trust_forwarded_headers(self):
+        from unittest.mock import patch
+        from harness.api.server import main
+        self.config.container_mode = True
+        with patch('harness.api.server.load_config', return_value=self.config), patch('uvicorn.run') as run:
+            main()
+        self.assertEqual(run.call_args.kwargs['host'], '0.0.0.0')
+        self.assertEqual(run.call_args.kwargs['workers'], 1)
+        self.assertFalse(run.call_args.kwargs['proxy_headers'])
+
     async def test_body_size_limit_and_security_headers(self):
         response = await self.client.post("/api/run", content=b"x" * (MAX_REQUEST_BYTES + 1),
                                           headers={"Authorization": f"Bearer {self.config.token}"})
