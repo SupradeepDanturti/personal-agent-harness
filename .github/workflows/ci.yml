@@ -43,9 +43,12 @@ jobs:
       - name: Exercise Google Workspace UI with synthetic provider responses
         working-directory: .
         run: uv run --locked --directory backend python -u -m tests.ui_google_acceptance
+      - name: Exercise MCP approval UI with a synthetic local server
+        working-directory: .
+        run: uv run --locked --directory backend python -u -m tests.ui_mcp_acceptance
   backend:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,3 +68,5 @@ jobs:
       - run: uv run --locked --directory backend python -m unittest discover -s tests -t . -v
       - name: Build Python distribution
         run: uv build --package personal-assistant-harness-backend --out-dir dist/backend
+      - name: Build and verify the local Docker runtime and acceptance images
+        run: python scripts/container-smoke.py --build

@@ -7,6 +7,7 @@ import { useAction } from "../../hooks/useAction";
 import { Card, Status, Feedback, Refresh } from "../../components/ui";
 import { ProviderConnections } from "../connections/ProviderConnections";
 import { GoogleSheets } from "./GoogleSheets";
+import { MCPConnections } from "./MCPConnections";
 import { type View } from "../../app/navigation";
 
 export function Connections({ api, runtime, navigate }: { api: Api; runtime: Item; navigate: (view: View) => void }) {
@@ -104,6 +105,7 @@ export function Connections({ api, runtime, navigate }: { api: Api; runtime: Ite
       {Boolean(google.connected && identity.id && capabilities.sheets) &&
         <GoogleSheets key={txt(google.connectionId)} api={api} google={google} openApprovals={() => navigate("Approvals")} />}
       <ProviderConnections api={api} />
+      <MCPConnections api={api} />
       <Card title="Runtime capabilities">
         <p className="section-description">
           Only capabilities reported by this runtime are listed. Additional

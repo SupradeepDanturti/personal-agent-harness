@@ -7,6 +7,9 @@ dist/
 .env
 .env.*
 !.env.example
+.docker.env
+.docker.env.*
+!.docker.env.example
 *.log
 *.zip
 coverage/

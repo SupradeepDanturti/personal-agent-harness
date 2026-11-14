@@ -26,6 +26,7 @@ docs = {name: (ROOT / file).read_text(encoding='utf-8') for name, file in {
     'Roadmap': 'docs/PLAN.md', 'Verification': 'docs/VERIFICATION.md',
     'Knowledge & providers': 'docs/KNOWLEDGE-AND-PROVIDERS.md',
     'Google Workspace': 'docs/GOOGLE-WORKSPACE.md',
+    'MCP tools': 'docs/MCP.md', 'Local Docker': 'docs/DOCKER.md',
 }.items()}
 runtime = (ROOT / 'backend/src/harness/api/routes.py').read_text(encoding='utf-8')
 routes = sorted(set(re.findall(r"route == '([^']+)'", runtime)))

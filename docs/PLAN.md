@@ -40,9 +40,9 @@ The current iteration unifies retained chat, memory, task and specialist results
 
 Next acceptance gates, in order:
 
-1. Add an owner-managed MCP connection registry with explicit per-tool grants, encrypted credentials, connection tests and bounded results. Keep remote tool requests behind the same authorization and approval policy. Do not inherit Codex app connections or treat server read-only hints as permission. Test timeout, credential redaction, tool changes, malicious content and reconnect behavior against a local fixture before enabling a real server. Retain attributable tool-result receipts so recall can find those results. MCP access is not implemented in this iteration.
+1. Add an owner-managed MCP connection registry with explicit per-tool grants, encrypted credentials, connection tests and bounded results. Keep remote tool requests behind the same authorization and approval policy. Do not inherit Codex app connections or treat server read-only hints as permission. Test timeout, credential redaction, tool changes, malicious content and reconnect behavior against a local fixture before enabling a real server. Retain attributable tool-result receipts so recall can find those results. MCP connections are now implemented with owner discovery/grants, encrypted storage, schema-bound reviewed calls and searchable result receipts; see MCP.md for supported schemas and protocol limits.
 2. Provide reproducible Docker Compose development with persistent SQLite/workspace/browser volumes, local-only published ports, explicit container bind/host validation, health checks and startup migrations. Prove restart/recovery, approvals, browser isolation and UI acceptance inside containers. The optional Docker script executor is separate from containerizing the application.
-3. Add resumable chat sessions, user-visible context/source usage, reusable workflow templates and measured recall evaluations. Existing retained messages are a single conversation stream; no imported external chats or Codex subagent history is available.
+3. Add resumable chat sessions, user-visible context/source usage, reusable workflow templates and measured recall evaluations. Existing retained messages remain a single conversation stream; no imported external chats or Codex subagent history is available.
 4. Only after the container gate passes, build and validate Cloudflare Workers adapters for durable state, browser/execution and private credentials, plus authenticated owner access. Cloudflare deployment is the last stage; this local Python process cannot be assumed to run unchanged inside Workers.
 
 A release needs passing backend and Chromium acceptance tests plus frontend checks. Live Google/MCP authorization, model spending and hosted deployment require their own explicit verification; fixture tests do not prove live service connectivity.
@@ -146,3 +146,29 @@ per-source freshness and bounded claim support review, durable repair threads,
 and Slack/Mastodon/Shopify/Home Assistant adapters. See
 `KNOWLEDGE-AND-PROVIDERS.md` for limits, setup and APIs. New live acceptance and
 provider consent remain pending; baseline live checks do not establish them.
+
+
+## Cloudflare setup deferred by owner
+
+The owner explicitly deferred actual Cloudflare account/domain setup on November
+13, 2026. Do not deploy a temporary/public demo account or ask for API keys in
+chat. Complete local Docker acceptance first. The Cloudflare CLI is available
+through pinned wrangler 4.162.0, but `wrangler whoami` currently reports no login.
+
+Deployment must preserve durable state and approvals; it cannot merely copy the
+local SQLite database into an ephemeral Worker filesystem. Python Workers run in
+Pyodide and need service adapters; Cloudflare Containers also have ephemeral disk
+by default. Before release, select and test authoritative durable storage,
+workspace/browser persistence, crash recovery, owner authentication, secure
+credential storage and scheduled wakeups. A Worker can route authenticated UI
+and API requests, but an unauthenticated reverse proxy is not a production
+assistant. Keep the existing Linux VM exclusion.
+
+Primary platform references:
+- https://developers.cloudflare.com/workers/languages/python/how-python-workers-work/
+- https://developers.cloudflare.com/workers/languages/python/stdlib/
+- https://developers.cloudflare.com/containers/faq/
+- https://developers.cloudflare.com/containers/api/durable-object-container/
+
+This records requirements and the setup deferral, not a claim of Cloudflare
+runtime compatibility, deployed authentication or hosted persistence.

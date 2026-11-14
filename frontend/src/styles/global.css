@@ -972,6 +972,37 @@ pre {
   max-height: 420px;
   overflow: auto;
 }
+.mcp-connections {
+  display: grid;
+  gap: 22px;
+  margin-top: 28px;
+}
+.mcp-server {
+  border-top: 1px solid light-dark(#dce2d3, #343e31);
+  padding-top: 22px;
+  min-width: 0;
+}
+.mcp-tool {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  margin: 16px 0;
+  border-radius: 8px;
+  background: light-dark(#f4f6ef, #1f271e);
+  min-width: 0;
+}
+.mcp-tool h4,
+.mcp-tool p {
+  margin: 0;
+}
+.mcp-tool select {
+  width: 100%;
+  padding: 10px;
+  color: inherit;
+  background: light-dark(#fbfcf9, #191e19);
+  border: 1px solid light-dark(#cdd5c3, #46533f);
+  border-radius: 6px;
+}
 @media (max-width: 650px) {
   .sidebar .nav-group {
     display: flex;

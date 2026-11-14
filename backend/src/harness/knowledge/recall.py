@@ -8,9 +8,10 @@ SOURCES = {
     'task': ('tasks', 'prompt', "prompt || char(10) || status || char(10) || coalesce(result,'') || char(10) || coalesce(error,'')", 'created_at', '1'),
     'workflow': ('workflows', "coalesce(json_extract(definition,'$.prompt'),'Workflow plan')", 'definition', 'created_at', '1'),
     'memory': ('memories', "kind || ' memory'", 'text', 'created_at', '1'),
+    'tool': ('events', "'MCP tool result'", 'detail', 'created_at', "type='mcp.result'"),
     'action': ('events', "'Completed action'", 'detail', 'created_at', "type='action.completed'"),
 }
-SOURCE_TAGS = {'message': 1, 'task': 2, 'workflow': 3, 'memory': 4, 'action': 5}
+SOURCE_TAGS = {'message': 1, 'task': 2, 'workflow': 3, 'memory': 4, 'action': 5, 'tool': 6}
 
 
 def initialize_recall(db):

@@ -73,23 +73,28 @@ class LocalStore:
     def __init__(self,path):
         if path != ':memory:': Path(path).parent.mkdir(parents=True,exist_ok=True)
         self.db=sqlite3.connect(path,isolation_level=None,timeout=5); self.db.row_factory=sqlite3.Row; self.runtime_lease=None; self._tx_depth=0; self._savepoint_id=0; self._closed=False
-        self.db.executescript('''PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON;
-        CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS runtime_owner(singleton INTEGER PRIMARY KEY CHECK(singleton=1),pid INTEGER NOT NULL,nonce TEXT NOT NULL);
-        INSERT OR IGNORE INTO settings VALUES ('memory_revision','0');
-        CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,role TEXT NOT NULL,content TEXT NOT NULL,run_id TEXT,created_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,text TEXT NOT NULL,kind TEXT NOT NULL,source TEXT NOT NULL,source_ids TEXT NOT NULL,provenance TEXT NOT NULL,confidence REAL NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS memory_versions(id TEXT PRIMARY KEY,memory_id TEXT NOT NULL,revision INTEGER NOT NULL,snapshot TEXT NOT NULL,supersedes TEXT,created_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS goals(id TEXT PRIMARY KEY,title TEXT NOT NULL,description TEXT NOT NULL,status TEXT NOT NULL,steps TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY,prompt TEXT NOT NULL,kind TEXT NOT NULL,parent_id TEXT,goal_id TEXT,status TEXT NOT NULL,result TEXT,error TEXT,attempts INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS workflows(id TEXT PRIMARY KEY,definition TEXT NOT NULL,created_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS schedules(id TEXT PRIMARY KEY,prompt TEXT NOT NULL,next_run_at INTEGER NOT NULL,interval_seconds INTEGER,cron TEXT,timezone TEXT NOT NULL,kind TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS approvals(id TEXT PRIMARY KEY,task_id TEXT,kind TEXT NOT NULL,payload TEXT NOT NULL,summary TEXT NOT NULL,digest TEXT NOT NULL,status TEXT NOT NULL,expires_at INTEGER NOT NULL,result TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS notifications(id TEXT PRIMARY KEY,title TEXT NOT NULL,body TEXT NOT NULL,task_id TEXT,dedupe_key TEXT UNIQUE,read_at INTEGER,created_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,type TEXT NOT NULL,task_id TEXT,detail TEXT NOT NULL,created_at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS usage(run_id TEXT PRIMARY KEY,day TEXT NOT NULL,reserved_tokens INTEGER NOT NULL,input_tokens INTEGER NOT NULL,output_tokens INTEGER NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
-        CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status,created_at); CREATE INDEX IF NOT EXISTS idx_schedules_due ON schedules(status,next_run_at); CREATE INDEX IF NOT EXISTS idx_usage_day ON usage(day);''')
-        initialize_knowledge(self.db)
+        try:
+            self.db.executescript('''PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON;
+            CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS runtime_owner(singleton INTEGER PRIMARY KEY CHECK(singleton=1),pid INTEGER NOT NULL,nonce TEXT NOT NULL);
+            INSERT OR IGNORE INTO settings VALUES ('memory_revision','0');
+            CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,role TEXT NOT NULL,content TEXT NOT NULL,run_id TEXT,created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,text TEXT NOT NULL,kind TEXT NOT NULL,source TEXT NOT NULL,source_ids TEXT NOT NULL,provenance TEXT NOT NULL,confidence REAL NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS memory_versions(id TEXT PRIMARY KEY,memory_id TEXT NOT NULL,revision INTEGER NOT NULL,snapshot TEXT NOT NULL,supersedes TEXT,created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS goals(id TEXT PRIMARY KEY,title TEXT NOT NULL,description TEXT NOT NULL,status TEXT NOT NULL,steps TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY,prompt TEXT NOT NULL,kind TEXT NOT NULL,parent_id TEXT,goal_id TEXT,status TEXT NOT NULL,result TEXT,error TEXT,attempts INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS workflows(id TEXT PRIMARY KEY,definition TEXT NOT NULL,created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS schedules(id TEXT PRIMARY KEY,prompt TEXT NOT NULL,next_run_at INTEGER NOT NULL,interval_seconds INTEGER,cron TEXT,timezone TEXT NOT NULL,kind TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS approvals(id TEXT PRIMARY KEY,task_id TEXT,kind TEXT NOT NULL,payload TEXT NOT NULL,summary TEXT NOT NULL,digest TEXT NOT NULL,status TEXT NOT NULL,expires_at INTEGER NOT NULL,result TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS notifications(id TEXT PRIMARY KEY,title TEXT NOT NULL,body TEXT NOT NULL,task_id TEXT,dedupe_key TEXT UNIQUE,read_at INTEGER,created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,type TEXT NOT NULL,task_id TEXT,detail TEXT NOT NULL,created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS usage(run_id TEXT PRIMARY KEY,day TEXT NOT NULL,reserved_tokens INTEGER NOT NULL,input_tokens INTEGER NOT NULL,output_tokens INTEGER NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+            CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status,created_at); CREATE INDEX IF NOT EXISTS idx_schedules_due ON schedules(status,next_run_at); CREATE INDEX IF NOT EXISTS idx_usage_day ON usage(day);''')
+            initialize_knowledge(self.db)
+        except BaseException:
+            self.db.close()
+            self._closed = True
+            raise
     def close(self):
         if self._closed: return
         if self.runtime_lease: self.db.execute('DELETE FROM runtime_owner WHERE singleton=1 AND pid=? AND nonce=?',(os.getpid(),self.runtime_lease))

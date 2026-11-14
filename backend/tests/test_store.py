@@ -15,6 +15,16 @@ class StoreTests(unittest.TestCase):
         self.path = str(Path(self.tmp.name) / 'assistant.sqlite')
         self.store = LocalStore(self.path)
 
+    def test_initialization_failure_closes_database_handle(self):
+        import sqlite3
+        from unittest.mock import MagicMock
+        connection = MagicMock()
+        connection.executescript.side_effect = sqlite3.OperationalError('synthetic initialization failure')
+        with patch('harness.persistence.store.sqlite3.connect', return_value=connection):
+            with self.assertRaisesRegex(sqlite3.OperationalError, 'synthetic initialization failure'):
+                LocalStore(':memory:')
+        connection.close.assert_called_once()
+
     def tearDown(self):
         self.store.close()
         for attempt in range(8):
