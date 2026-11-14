@@ -57,6 +57,22 @@ class RuntimeTests(OfflineAsyncCase):
         self.assertEqual(self.runtime.store.list_usage()[0]['inputTokens'], 12)
         self.assertTrue((self.root / 'workspace/memory/MEMORY.md').exists())
 
+    async def test_provider_usage_details_are_recorded_without_changing_budget_counts(self):
+        async def runner(config, prompt, context, caps):
+            caps.on_usage(120, 9)
+            caps.on_usage_details({'inputTokens': 120, 'outputTokens': 9,
+                'cachedInputTokens': 80, 'modelRequests': 2, 'contextCharacters': len(context)})
+            return 'Measured result'
+        self.runtime.runner = runner
+        status, _ = await self.request('/chat', {'message': 'Check usage details'})
+        self.assertEqual(status, 200)
+        usage = self.runtime.store.list_usage()[0]
+        self.assertEqual((usage['inputTokens'], usage['outputTokens']), (120, 9))
+        event = next(e for e in self.runtime.store.list_events() if e['type'] == 'run.usage')
+        self.assertEqual(event['detail']['cachedInputTokens'], 80)
+        self.assertEqual(event['detail']['modelRequests'], 2)
+        self.assertLessEqual(event['detail']['contextCharacters'], 12000)
+
     async def test_schedule_executes_once_and_persists(self):
         self.runtime.store.save_schedule({'id': 'due', 'prompt': 'Synthetic reminder', 'runAt': 1})
         await self.pump(); self.assertEqual(len(self.runtime.store.list_tasks()), 1)
@@ -198,8 +214,8 @@ class RuntimeTests(OfflineAsyncCase):
         from harness.agents.runner import run_assistant
         from agents.items import ModelResponse
         from agents.usage import Usage
-        usage = []; evidence = []
-        result = SimpleNamespace(final_output='Synthetic SDK result', context_wrapper=SimpleNamespace(usage=SimpleNamespace(input_tokens=12, output_tokens=8)),
+        usage = []; evidence = []; details = []
+        result = SimpleNamespace(final_output='Synthetic SDK result', context_wrapper=SimpleNamespace(usage=SimpleNamespace(input_tokens=12, output_tokens=8, requests=2, input_tokens_details=SimpleNamespace(cached_tokens=7))),
             raw_responses=[ModelResponse(output=[{'id': 'msg_test', 'type': 'message', 'role': 'assistant', 'status': 'completed',
                 'content': [{'type': 'output_text', 'text': 'Synthetic citation', 'annotations': [
                     {'type': 'url_citation', 'url': 'https://playwright.dev/', 'title': 'Playwright', 'start_index': 0, 'end_index': 9}]}]}], usage=Usage(), response_id=None)])
@@ -207,8 +223,9 @@ class RuntimeTests(OfflineAsyncCase):
         call = AsyncMock(return_value=result)
         with patch('agents.Runner.run', call), patch('openai.AsyncOpenAI', return_value=client):
             output = await run_assistant(self.config, 'Synthetic prompt', 'Synthetic context',
-                AgentCapabilities(read_only=True, on_usage=lambda i, o: usage.append((i, o)), on_evidence=evidence.append))
+                AgentCapabilities(read_only=True, on_usage=lambda i, o: usage.append((i, o)), on_usage_details=details.append, on_evidence=evidence.append))
         self.assertEqual(output, 'Synthetic SDK result')
+        self.assertEqual(details, [{'inputTokens': 12, 'outputTokens': 8, 'cachedInputTokens': 7, 'modelRequests': 2, 'contextCharacters': 17}])
         self.assertEqual(usage, [(12, 8)]); self.assertEqual(evidence, [['https://playwright.dev/']])
         self.assertEqual(call.call_args.args[0].model, 'gpt-6-luna'); self.assertEqual(client.close.await_count, 1)
 

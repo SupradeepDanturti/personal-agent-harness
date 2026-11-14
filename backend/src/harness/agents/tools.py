@@ -10,7 +10,7 @@ OPERATIONS = (
     "browser_read", "memory_search", "goals", "files", "skills", "gmail_read",
     "calendar_read", "propose_action", "delegate", "workflow", "notify",
     "schedule_cron", "complete_goal_step",
-    "history_search", "people_search", "provider_read", "sheets_read",
+    "history_search", "people_search", "provider_read", "sheets_read", "recall_search", "recall_read",
 )
 
 
@@ -48,6 +48,8 @@ def _build_tools(caps: AgentCapabilities, function_tool: Any, WebSearchTool: Any
             "data. Arguments are a JSON object. browser_read: {action:tabs|navigate|snapshot,url?,tabId?}; "
             "memory_search:{query}; goals:{action:list|create|update,id?,title?,description?,steps?,status?}; "
             "history_search:{query,semantic?:boolean} searches all retained chat; semantic mode makes extra Luna calls. "
+            "recall_search:{query} searches retained chats, memories, tasks, specialist results, workflow plans and completed action records without extra model calls. "
+            "recall_read:{kind:message|memory|task|workflow|action,id} reads a current source, capped at 12000 characters. Search first; cite kind and ID. Past results may be stale; verify before acting. "
             "people_search:{query} retrieves sourced person/group relationships. "
             "provider_read:{provider:slack|mastodon|shopify|homeassistant,action,channel?,entityId?,query?}; "
             "provider actions: slack channels|history (exact conversation ID); mastodon home; shopify products; homeassistant states (exact entityId). "
@@ -67,7 +69,7 @@ def _build_tools(caps: AgentCapabilities, function_tool: Any, WebSearchTool: Any
         async def operation_tool(
             operation: Literal["browser_read", "memory_search", "goals", "files", "skills", "gmail_read",
                                "calendar_read", "propose_action", "delegate", "workflow", "notify",
-                               "schedule_cron", "complete_goal_step", "history_search", "people_search", "provider_read", "sheets_read"],
+                               "schedule_cron", "complete_goal_step", "history_search", "people_search", "provider_read", "sheets_read", "recall_search", "recall_read"],
             argumentsJson: str,
         ) -> Any:
             if len(argumentsJson) > 16000:

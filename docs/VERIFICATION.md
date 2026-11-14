@@ -297,3 +297,35 @@ recorded. This validates the synthetic four-agent live flow; failure/restart
 cases remain covered by component tests with an injected runner.
 Cloudflare's original workflow adapter has
 not been expanded to support these local agent graphs.
+
+
+## Recall and usability release - November 13, 2026
+
+Unified local recall searches retained messages, memories, tasks (including
+specialist results), workflow definitions and completed action receipts. New
+regressions cover records beyond the newest 500, legacy backfill, source edits,
+deletes, existing forget semantics, transaction rollback, cross-table row IDs,
+query operators as data, output bounds and read-only specialist access.
+
+Context assembly uses no model calls, caps reference context at 12,000
+characters, and retrieves relevant retained excerpts even when recent messages
+are large. Long valid chat requests remain accepted. Character counts are not
+token estimates. The SDK adapter records provider-reported input/output/cache
+usage and request counts; budget accounting continues to include cached input.
+No paid live-model call or measured cost reduction is claimed for this release.
+Moving the changing timestamp after reference context preserves more shared
+prompt prefix, following OpenAI prompt caching guidance:
+https://developers.openai.com/api/docs/guides/prompt-caching
+
+Backend regression: 131 tests run, 130 passed, one Windows symlink skip.
+TypeScript and production build pass. Chromium acceptance passes for both local
+workspace/restart and synthetic Google Workspace flows. The local scenario also
+finds a completed specialist result, opens its original source and checks no
+horizontal overflow at 390px. Frontend retains the existing large-chunk warning.
+Backend packaging, compilation and tracked-private-file checks pass. The Google
+fixture replaces synthetic vaults atomically and retries transient Windows file
+locks; it never accesses a real account.
+
+MCP connections, importing external chat histories, full session management,
+containerized app acceptance and Cloudflare hosting remain future gates in
+PLAN.md. This release searches only the harness's own retained records.

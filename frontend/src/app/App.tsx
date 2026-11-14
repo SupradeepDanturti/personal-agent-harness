@@ -6,7 +6,7 @@ import { neutralTheme } from "@astryxdesign/theme-neutral/built";
 import { createApi, type Item } from "../api/client";
 import { txt } from "../lib/format";
 import { session, setSession } from "../lib/session";
-import { views, descriptions, type View } from "./navigation";
+import { navigationGroups, descriptions, type View } from "./navigation";
 import { Chat } from "../features/chat/Chat";
 import { Memory } from "../features/memory/Memory";
 import { Goals } from "../features/goals/Goals";
@@ -88,26 +88,28 @@ export function App() {
           </a>
           <div className="workspace-label">YOUR WORKSPACE</div>
           <nav aria-label="Main navigation">
-            {views.map((name, index) => (
+            {navigationGroups.map((group) => (
+              <div className="nav-group" key={group.label}>
+                <div className="nav-group-label">{group.label}</div>
+                {group.items.map((name) => (
               <button
                 key={name}
                 className={`nav-item ${view === name ? "active" : ""}`}
                 onClick={() => setView(name)}
                 aria-current={view === name ? "page" : undefined}
               >
-                <span className="nav-number" aria-hidden="true">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
                 {name}
               </button>
+                ))}
+              </div>
             ))}
           </nav>
           <div className="account">
-            <span className={`connection-dot ${token ? "connected" : ""}`} />
+            <span className={`connection-dot ${runtime.local ? "connected" : ""}`} />
             <div>
               <strong>Personal workspace</strong>
               <small>
-                {token ? "Connected this session" : "Not connected"}
+                {!token ? "Not connected" : runtime.unavailable ? "Connection unavailable" : runtime.local ? "Connected this session" : "Connecting…"}
               </small>
             </div>
             {token && (
@@ -140,6 +142,13 @@ export function App() {
                 <p>{descriptions[view]}</p>
               </div>
               <div className="page-actions">
+                {token && view !== "History" && (
+                  <Button
+                    label="Find past work"
+                    variant="secondary"
+                    onClick={() => setView("History")}
+                  />
+                )}
                 <Button
                   label={mode === "dark" ? "Light mode" : "Dark mode"}
                   variant="secondary"

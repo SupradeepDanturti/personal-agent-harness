@@ -1,5 +1,5 @@
 import { type Api } from "../../api/client";
-import { txt, pretty, list, time } from "../../lib/format";
+import { txt, pretty, list, time, obj } from "../../lib/format";
 import { useResource } from "../../hooks/useResource";
 import { Empty, Card, Feedback, Refresh } from "../../components/ui";
 
@@ -35,7 +35,18 @@ export function Activity({ api }: { api: Api }) {
                   Task: {txt(item.taskId ?? item.task_id)}
                 </div>
               )}
-              <pre>{pretty(item.detail ?? item.data ?? item.payload)}</pre>
+              {txt(item.type ?? item.kind) === "run.usage" && (
+                <p className="section-description">
+                  {txt(obj(item.detail ?? item.data ?? item.payload).inputTokens)} input tokens ·{" "}
+                  {txt(obj(item.detail ?? item.data ?? item.payload).cachedInputTokens)} cached input tokens ·{" "}
+                  {txt(obj(item.detail ?? item.data ?? item.payload).outputTokens)} output tokens ·{" "}
+                  {txt(obj(item.detail ?? item.data ?? item.payload).contextCharacters)} context characters
+                </p>
+              )}
+              <details>
+                <summary>Event details</summary>
+                <pre>{pretty(item.detail ?? item.data ?? item.payload)}</pre>
+              </details>
             </div>
           </article>
         ))}

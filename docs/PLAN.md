@@ -34,6 +34,19 @@ acceptance checks passed as recorded in `docs/VERIFICATION.md`.
 Independent modules may be prepared in parallel. Being implemented is not the
 same as being live-tested. Do not claim a stage complete without its gate.
 
+## Product iteration: recall and everyday usability (November 2026)
+
+The current iteration unifies retained chat, memory, task and specialist results, workflow definitions and recorded action outcomes in local keyword search. The agent uses bounded excerpts and can inspect a specific source. Search requires no model calls. Navigation groups daily work, knowledge, automation and settings. Provider-reported cache usage is recorded separately from total usage; character bounds are not token estimates or guaranteed savings.
+
+Next acceptance gates, in order:
+
+1. Add an owner-managed MCP connection registry with explicit per-tool grants, encrypted credentials, connection tests and bounded results. Keep remote tool requests behind the same authorization and approval policy. Do not inherit Codex app connections or treat server read-only hints as permission. Test timeout, credential redaction, tool changes, malicious content and reconnect behavior against a local fixture before enabling a real server. Retain attributable tool-result receipts so recall can find those results. MCP access is not implemented in this iteration.
+2. Provide reproducible Docker Compose development with persistent SQLite/workspace/browser volumes, local-only published ports, explicit container bind/host validation, health checks and startup migrations. Prove restart/recovery, approvals, browser isolation and UI acceptance inside containers. The optional Docker script executor is separate from containerizing the application.
+3. Add resumable chat sessions, user-visible context/source usage, reusable workflow templates and measured recall evaluations. Existing retained messages are a single conversation stream; no imported external chats or Codex subagent history is available.
+4. Only after the container gate passes, build and validate Cloudflare Workers adapters for durable state, browser/execution and private credentials, plus authenticated owner access. Cloudflare deployment is the last stage; this local Python process cannot be assumed to run unchanged inside Workers.
+
+A release needs passing backend and Chromium acceptance tests plus frontend checks. Live Google/MCP authorization, model spending and hosted deployment require their own explicit verification; fixture tests do not prove live service connectivity.
+
 ## Runtime design
 
 ```mermaid
