@@ -18,7 +18,9 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HOME=/data/.assistant/home \
     FRONTEND_DIST_DIR=/app/frontend/dist BROWSER_CHANNEL=chromium \
     CONTAINER_MODE=true LOCAL_PORT=8787 ENABLE_DOCKER_EXECUTION=false
 WORKDIR /app
-RUN python -m pip install --no-cache-dir uv==0.10.7
+# Playwright's bundled Node must start before --with-deps can install browsers.
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 libstdc++6 \
+    && python -m pip install --no-cache-dir uv==0.10.7
 COPY pyproject.toml uv.lock ./
 COPY backend/pyproject.toml ./backend/pyproject.toml
 COPY backend/src ./backend/src
@@ -40,10 +42,10 @@ CMD ["harness-server"]
 # Test entrypoints and Node's historical SQLite fixture are absent from runtime.
 FROM runtime AS acceptance
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 libstdc++6 \
-    && rm -rf /var/lib/apt/lists/*
 COPY --from=frontend-build /usr/local/bin/node /usr/local/bin/node
 COPY backend/tests /app/backend/tests
+COPY legacy/typescript/src/domain.ts /app/legacy/typescript/src/domain.ts
+COPY legacy/typescript/src/local/store.ts legacy/typescript/src/local/workflows.ts /app/legacy/typescript/src/local/
 COPY scripts/container-acceptance.py scripts/container-fixture.py /app/scripts/
 ENV PYTHONPATH=/app/backend HOME=/tmp/harness
 WORKDIR /test-work

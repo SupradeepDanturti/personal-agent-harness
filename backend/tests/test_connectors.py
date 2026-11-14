@@ -22,7 +22,7 @@ class GoogleConnectorTests(OfflineAsyncCase):
         # Keep temp files under the checked-out workspace. The Windows
         # restricted temp container allows top-level file creation but denies
         # writes inside Python-created nested temp folders.
-        self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).parent)
+        self.temp = tempfile.TemporaryDirectory(dir=Path.cwd())
         self.vault = Path(self.temp.name) / "google.json"
         self.requests = []
 
