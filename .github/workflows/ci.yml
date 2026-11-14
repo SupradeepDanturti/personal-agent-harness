@@ -40,6 +40,9 @@ jobs:
       - name: Exercise local UI, HTTP, SQLite and restart persistence
         working-directory: .
         run: uv run --locked --directory backend python -u -m tests.ui_acceptance
+      - name: Exercise Google Workspace UI with synthetic provider responses
+        working-directory: .
+        run: uv run --locked --directory backend python -u -m tests.ui_google_acceptance
   backend:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

@@ -10,7 +10,7 @@ OPERATIONS = (
     "browser_read", "memory_search", "goals", "files", "skills", "gmail_read",
     "calendar_read", "propose_action", "delegate", "workflow", "notify",
     "schedule_cron", "complete_goal_step",
-    "history_search", "people_search", "provider_read",
+    "history_search", "people_search", "provider_read", "sheets_read",
 )
 
 
@@ -53,7 +53,10 @@ def _build_tools(caps: AgentCapabilities, function_tool: Any, WebSearchTool: Any
             "provider actions: slack channels|history (exact conversation ID); mastodon home; shopify products; homeassistant states (exact entityId). "
             "files:{action:list|read|write,path?,content?}; skills:{action:list|read,name?}; "
             "gmail_read:{action:search|read,query?,id?}; calendar_read:{start,end}; "
-            "propose_action:{kind:browser.click|browser.fill|gmail.send|calendar.create|workspace.execute|skill.save|slack.send|mastodon.publish,payload:{...},summary}; "
+            "sheets_read:{action:list|search|tabs|read,id?,query?,pageToken?,offset?,range?}. Use registered IDs or fresh search handles, never guess a Google ID. "
+            "Search requires owner-enabled discovery. Whole-sheet handles need a tab-qualified rectangle, max100 rows/20 columns/1000 cells. Saved range grants cannot be broadened. "
+            "propose_action:{kind:browser.click|browser.fill|gmail.send|calendar.create|sheets.update|workspace.execute|skill.save|slack.send|mastodon.publish,payload:{...},summary}; "
+            "sheets.update payload:{sheetId:registered-or-discovered-handle,range?:boundedA1,values:JSONrows}; uses literal RAW cells and requires exact approval. "
             "slack.send payload:{channel:exactConversationId,text}; mastodon.publish payload:{text,visibility:public|unlisted|private|direct}. "
             "delegate:{prompt}; workflow:{action:create|list,prompt?,specialists?:[{role,prompt}]}; "
             "notify:{title,body}; schedule_cron:{prompt,cron,timezone}; complete_goal_step:{goalId,stepId,result}. "
@@ -64,7 +67,7 @@ def _build_tools(caps: AgentCapabilities, function_tool: Any, WebSearchTool: Any
         async def operation_tool(
             operation: Literal["browser_read", "memory_search", "goals", "files", "skills", "gmail_read",
                                "calendar_read", "propose_action", "delegate", "workflow", "notify",
-                               "schedule_cron", "complete_goal_step", "history_search", "people_search", "provider_read"],
+                               "schedule_cron", "complete_goal_step", "history_search", "people_search", "provider_read", "sheets_read"],
             argumentsJson: str,
         ) -> Any:
             if len(argumentsJson) > 16000:

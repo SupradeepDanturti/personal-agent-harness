@@ -40,6 +40,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
             for name, getter in [('goals', runtime.store.list_goals), ('tasks', runtime.store.list_tasks), ('schedules', runtime.store.list_schedules), ('approvals', runtime.store.list_approvals), ('notifications', runtime.store.list_notifications), ('events', runtime.store.list_events)]:
                 if route == '/' + name: return JSONResponse({name: getter()})
             if route == '/connections': return JSONResponse({'google': await runtime.google.status(), 'providers':await runtime.providers.status()})
+            if route == '/google/sheets': return JSONResponse(await runtime.sheets.list())
             if route == '/browser/status': return JSONResponse(await runtime.browser.status())
             if route == '/browser/tabs': return JSONResponse({'tabs': await runtime.browser.tabs()})
             if route == '/browser/snapshot': return JSONResponse(await runtime.browser.snapshot(query.get('tabId', '')))
@@ -51,6 +52,15 @@ async def dispatch(runtime, method, path, body=None, query=None):
                 return JSONResponse(file)
             if route == '/settings': return JSONResponse({'timezone': runtime.store.get_setting('timezone') or 'America/Toronto', 'nightlyDreamEnabled': runtime.store.get_setting('nightlyDreamEnabled') is not False})
         if method == 'POST':
+            if route == '/google/sheets': return JSONResponse(await runtime.sheets.register(body), 201)
+            if route == '/google/sheets/search': return JSONResponse(await runtime.sheets.search(body.get('query', ''), body.get('pageToken')))
+            sheet_match = re.fullmatch(r'/google/sheets/([^/]+)/(tabs|read|propose)', route)
+            if sheet_match:
+                identifier, action = sheet_match.groups()
+                if action == 'tabs': return JSONResponse(await runtime.sheets.tabs(identifier, body.get('offset', 0)))
+                if action == 'read': return JSONResponse(await runtime.sheets.read(identifier, body.get('range')))
+                if set(body) - {'range', 'values'}: raise ValueError('Invalid sheet update proposal')
+                return JSONResponse(await runtime.propose_action('sheets.update', {**body, 'sheetId': identifier}, 'Update the reviewed Google Sheets range'), 201)
             if route == '/history/search': return JSONResponse(await runtime.search_history(text(body.get('query')),body.get('semantic') is True))
             if route == '/people': return JSONResponse(runtime.people.save(body),201)
             if route == '/people/relationships': return JSONResponse(runtime.people.relate(body),201)
@@ -133,6 +143,7 @@ async def dispatch(runtime, method, path, body=None, query=None):
                 if not re.fullmatch(r'[\w.-]{1,100}', key, flags=re.ASCII): raise ValueError('A stable eventId is required')
                 return JSONResponse(runtime.store.create_task(dict(id=f'hook-{key}', prompt=text(body.get('prompt')), kind='task')), 202)
         if method == 'PATCH':
+            if route == '/google/sheets/discovery': return JSONResponse(await runtime.sheets.discovery(body.get('enabled')))
             if re.fullmatch(r'/people/[^/]+',route): return JSONResponse(runtime.people.save(body,id_))
             if re.fullmatch(r'/repairs/[^/]+',route): return JSONResponse(runtime.repairs.transition(id_,body))
             if re.fullmatch(r'/memories/[^/]+', route):
@@ -147,6 +158,8 @@ async def dispatch(runtime, method, path, body=None, query=None):
                     if not body['nightlyDreamEnabled']: runtime.store.delete_schedule('nightly-dream')
                 return JSONResponse({'ok': True})
         if method == 'DELETE':
+            sheet_match = re.fullmatch(r'/google/sheets/([^/]+)', route)
+            if sheet_match: return JSONResponse(await runtime.sheets.remove(sheet_match[1]))
             if re.fullmatch(r'/people/[^/]+',route): runtime.people.remove(id_); return JSONResponse({'deleted':True})
             if re.fullmatch(r'/people/relationships/[^/]+',route):
                 runtime.store.db.execute('DELETE FROM people_edges WHERE id=?',(parts[3],)); return JSONResponse({'deleted':True})

@@ -10,7 +10,7 @@ from pathlib import Path
 import httpx
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from harness.integrations.google import GoogleConnector, SCOPES
+from harness.integrations.google import GoogleConnector, SCOPES, GMAIL_READ_SCOPE, GMAIL_SEND_SCOPE, CALENDAR_SCOPE
 from tests.offline_loop import OfflineAsyncCase
 
 
@@ -52,6 +52,8 @@ class GoogleConnectorTests(OfflineAsyncCase):
     async def test_auth_pkce_state_single_use_and_compatible_vault(self):
         def handler(request):
             self.requests.append(request)
+            if request.url.host == "openidconnect.googleapis.com":
+                return httpx.Response(200, json={"sub": "google-user", "email": "user@example.com", "email_verified": True})
             return httpx.Response(200, json={"access_token": "access", "refresh_token": "refresh",
                                              "expires_in": 3600, "scope": " ".join(SCOPES)})
         c = self.connector(handler)
@@ -63,14 +65,19 @@ class GoogleConnectorTests(OfflineAsyncCase):
         self.assertEqual(set(saved), {"version", "cipher", "wrappedKey", "ciphertext"})
         self.assertEqual(saved["version"], 2)
         self.assertEqual(saved["cipher"], "dcrypt-fernet")
-        self.assertEqual(await c.status(), {"provider": "google", "configured": True, "connected": True,
-                                          "scopes": SCOPES, "redirectUri": "http://127.0.0.1/callback"})
+        status = await c.status()
+        self.assertEqual(status["identity"], {"id": "google-user", "email": "user@example.com"})
+        self.assertEqual(status["scopes"], SCOPES)
+        self.assertEqual(status["missingScopes"], [])
+        self.assertFalse(status["reconnectRequired"])
+        self.assertTrue(status["capabilities"]["sheets"])
+        self.assertTrue(status["connectionId"])
         with self.assertRaisesRegex(ValueError, "Invalid or expired OAuth state"):
             await c.complete_auth("code-value", auth["state"])
 
     async def test_old_typescript_envelope_is_readable_and_mail_is_normalized(self):
         self.seed_tokens({"access_token": "old-access", "refresh_token": "refresh",
-                          "expires_at": time.time() * 1000 + 600_000, "scope": "scope-a scope-b"})
+                          "expires_at": time.time() * 1000 + 600_000, "scope": GMAIL_READ_SCOPE})
         body = base64.urlsafe_b64encode(b"Hello, world").decode().rstrip("=")
         def handler(request):
             self.requests.append(request)
@@ -84,7 +91,7 @@ class GoogleConnectorTests(OfflineAsyncCase):
         self.assertEqual(self.requests[0].headers["Authorization"], "Bearer old-access")
 
     async def test_refresh_is_serialized_and_mail_query_clamped(self):
-        self.seed_tokens({"access_token": "old", "refresh_token": "refresh", "expires_at": 0, "scope": "s"})
+        self.seed_tokens({"access_token": "old", "refresh_token": "refresh", "expires_at": 0, "scope": GMAIL_READ_SCOPE})
         refreshes = 0
         def handler(request):
             nonlocal refreshes
@@ -101,7 +108,7 @@ class GoogleConnectorTests(OfflineAsyncCase):
         self.assertEqual(sorted(r.url.params["maxResults"] for r in list_requests), ["1", "25"])
 
     async def test_mail_sending_encodes_body_and_rejects_header_injection(self):
-        self.seed_tokens({"access_token": "a", "expires_at": time.time() * 1000 + 999999, "scope": "s"})
+        self.seed_tokens({"access_token": "a", "expires_at": time.time() * 1000 + 999999, "scope": GMAIL_SEND_SCOPE})
         def handler(request):
             self.requests.append(request)
             return httpx.Response(200, json={"id": "sent"})
@@ -124,7 +131,7 @@ class GoogleConnectorTests(OfflineAsyncCase):
             await c.list_mail()
 
     async def test_calendar_validates_offset_and_timezone(self):
-        self.seed_tokens({"access_token": "a", "expires_at": time.time() * 1000 + 999999, "scope": "s"})
+        self.seed_tokens({"access_token": "a", "expires_at": time.time() * 1000 + 999999, "scope": CALENDAR_SCOPE})
         def handler(request):
             self.requests.append(request)
             return httpx.Response(200, json={"items": []})
